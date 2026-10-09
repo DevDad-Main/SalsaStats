@@ -1,46 +1,60 @@
 # SalsaStats
 
-A small, non-intrusive Windows desktop monitor for live CPU, memory, and available GPU stats. Built with Electron and `systeminformation`.
+![Windows release](https://github.com/DevDad-Main/SalsaStats/actions/workflows/release.yml/badge.svg)
 
-## Features
+A lightweight Windows dashboard and overlay for live CPU, memory, and available GPU telemetry. SalsaStats runs without administrator privileges, injectors, or game hooks.
 
-- Live CPU and memory usage with a rolling CPU/GPU history chart
-- GPU load and temperature when reported by the installed graphics driver
-- Full dashboard and a compact overlay layout
-- Optional always-on-top pin
-- No game injection and no administrator privileges required
-- Opens directly to the dashboard without a loading screen
+## Download
 
-## Run
+Get the latest x64 installer from [GitHub Releases](https://github.com/DevDad-Main/SalsaStats/releases/latest). The NSIS installer is configured for the current user and does not request administrator elevation.
 
-Install [Node.js](https://nodejs.org/), then run:
+The installer is unsigned. Windows SmartScreen may show a reputation warning, and managed-device application-control policies may block it. An unsigned build cannot override local organization policy.
+
+## What It Shows
+
+- CPU usage, model, core count, and available temperature/clock readings
+- Memory usage
+- GPU model, utilization, temperature, memory, clock, and power when exposed by the driver
+- A short CPU/GPU usage history
+- Full dashboard, compact view, and a configurable always-on-top overlay
+- Local rotating logs and recovery options for application errors
+
+Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available.
+
+## Overlay
+
+Choose **Overlay** in the dashboard. Use **Setup** in the overlay to adjust its size, position, colors, and displayed metrics. The overlay uses a high topmost window level and does not take focus when raised, but Windows or a game using protected/exclusive-fullscreen presentation can still cover ordinary desktop overlays.
+
+## GeForce NOW And FPS
+
+SalsaStats does not currently capture game-render FPS. GeForce NOW's own statistics panel is the authoritative source for stream/network statistics; there is no documented API for SalsaStats to read those values. The local GeForce NOW client’s presentation rate is not the same as the game’s server-side render FPS, so SalsaStats does not label one as the other.
+
+If a game provides its own FPS counter, it may be visible in the streamed image, but SalsaStats does not read that counter. Reliable game FPS requires a supported capture source and may require permissions that are unavailable in a non-admin session.
+
+## Updates And Logs
+
+Packaged builds check GitHub Releases at startup and every six hours. Updates download in the background; SalsaStats offers a restart button after the download completes and will not restart in the middle of a session. Existing v1.0.0 installs must be manually upgraded to v1.0.2 once; v1.0.2 is the first published release with the updater.
+
+Logs default to `%APPDATA%\salsastats\logs`. Change or open the log folder from **Customize** under **Log folder**. Logs are JSON Lines, rotate at 2 MB, and retain up to three backups. A one-time startup record includes detected CPU/GPU names and adapter availability to help diagnose remote-session differences. Hardware readings and error logs stay on the PC; update checks contact GitHub.
+
+## Build And Test
+
+Requirements: Node.js 24 and npm. From a Windows development prompt:
 
 ```bash
-npm install
+npm ci
 npm run check
 npm test
 npm start
 ```
 
-## Windows release
-
-Build the x64 per-user NSIS installer with:
+Build a local x64 per-user installer without publishing it:
 
 ```bash
 npm run build:win
 ```
 
-The installer is created under `release/` and is configured to install for the current user without administrator privileges. Pushing a version tag such as `v1.0.0` runs the Windows release workflow and attaches the `.exe` to the repository's GitHub Releases page. The installer is currently unsigned, so SmartScreen may show a reputation warning and managed-PC application-control policies may block it. Code signing can improve publisher trust, but it cannot override an organization's local policy.
-
-Packaged builds check GitHub Releases at startup and every six hours, download updates in the background, and offer a restart button once the download finishes. Existing `v1.0.0` installs need one manual upgrade to `v1.0.1`; releases from `v1.0.1` onward include the updater.
-
-The dashboard samples CPU and memory every two seconds. Less predictable hardware sensors are cached between reads to keep polling overhead down.
-
-Logs are written to the app's user-data `logs` directory by default. Choose a different folder from **Customize** under **Log folder**. Logs use JSON lines and rotate at 2 MB, retaining up to three backups. Fatal errors are written before the app offers reload or close actions; shutdown has a timeout fallback if the window cannot close normally.
-
-## FPS limitation
-
-The app does not currently capture a game's frame rate. Average FPS and 1% low need a game capture source; they are shown as unavailable rather than estimated. Adding reliable game FPS capture requires a separate capture integration and may have different permission and compatibility requirements.
+The installer and update metadata are written under `release/`. To publish, push a version tag such as `v1.0.2`; the Windows GitHub Actions workflow builds the installer and publishes the required updater feed files to the Releases page.
 
 ## License
 

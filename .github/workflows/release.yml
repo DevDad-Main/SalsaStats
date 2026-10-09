@@ -24,7 +24,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish installer and updater metadata
+      - name: Build and stage installer and updater metadata
         run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish GitHub release and notes
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SalsaStats ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          fail_on_unmatched_files: true
+          files: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
