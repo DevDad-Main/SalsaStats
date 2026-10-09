@@ -1,6 +1,6 @@
 {
   "name": "salsastats",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {

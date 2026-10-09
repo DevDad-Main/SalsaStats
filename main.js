@@ -9,6 +9,7 @@ const OVERLAY_BASE_WIDTH = 340;
 const OVERLAY_BASE_HEIGHT = 490;
 const OVERLAY_MIN_WIDTH = 300;
 const OVERLAY_MIN_HEIGHT = 390;
+const OVERLAY_Z_ORDER_INTERVAL_MS = 1000;
 const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -17,6 +18,7 @@ const logger = createLogger({ fallbackDirectory: path.join(process.cwd(), 'logs'
 
 let mainWindow;
 let statsTimer;
+let overlayZOrderTimer;
 let updateCheckTimer;
 let statsInFlight = false;
 let shutdownTimer;
@@ -43,8 +45,10 @@ function initializeLogging() {
 function stopBackgroundWork() {
   isQuitting = true;
   clearTimeout(statsTimer);
+  clearInterval(overlayZOrderTimer);
   clearInterval(updateCheckTimer);
   statsTimer = null;
+  overlayZOrderTimer = null;
   updateCheckTimer = null;
 }
 
@@ -285,8 +289,13 @@ function createWindow() {
     window.center();
     window.show();
   });
+  window.on('blur', () => {
+    if (mainWindow === window && currentMode === 'overlay' && !isQuitting) window.moveTop();
+  });
   window.on('close', () => {
     isWindowClosing = true;
+    clearInterval(overlayZOrderTimer);
+    overlayZOrderTimer = null;
   });
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null;
@@ -307,6 +316,18 @@ function applyWindowStacking() {
   if (overlay) mainWindow.moveTop();
 }
 
+function syncOverlayZOrderMaintenance() {
+  clearInterval(overlayZOrderTimer);
+  overlayZOrderTimer = null;
+  if (currentMode !== 'overlay' || isQuitting) return;
+
+  overlayZOrderTimer = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible() || currentMode !== 'overlay') return;
+    mainWindow.moveTop();
+  }, OVERLAY_Z_ORDER_INTERVAL_MS);
+  overlayZOrderTimer.unref();
+}
+
 registerWindowHandler('window:mode', mode => {
   currentMode = ['compact', 'overlay'].includes(mode) ? mode : 'full';
   if (currentMode === 'compact') {
@@ -321,6 +342,7 @@ registerWindowHandler('window:mode', mode => {
     mainWindow.center();
   }
   applyWindowStacking();
+  syncOverlayZOrderMaintenance();
   positionOverlay();
 });
 
