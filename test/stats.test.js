@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   parseNvidiaSmiOutput,
+  parseTypeperfGpuMemoryOutput,
+  parseWmiGpuAdapterMemoryListOutput,
   parseWmiGpuAdapterMemoryOutput,
   parseWmiGpuEngineOutput,
   parseWmiGpuNames,
@@ -105,5 +107,53 @@ test('converts WMI dedicated GPU memory counters from bytes to MiB', () => {
     memoryUsed: 2048,
     memoryTotal: null,
     adapterName: 'luid_0x0000_phys_0',
+  });
+});
+
+test('parses the GeForce NOW list-format adapter-memory output with multiple adapters', () => {
+  const output = [
+    'Caption=',
+    'DedicatedUsage=2377986048',
+    'Description=',
+    'Frequency_Object=',
+    'Frequency_PerfTime=',
+    'Frequency_Sys100NS=',
+    'Name=luid_0x00000000_0x0016DEE9_phys_0',
+    'SharedUsage=396124160',
+    'Timestamp_Object=',
+    'Timestamp_PerfTime=',
+    'Timestamp_Sys100NS=',
+    'TotalCommitted=2989006848',
+    '',
+    'Caption=',
+    'DedicatedUsage=0',
+    'Description=',
+    'Name=luid_0x00000000_0x0000EEE6_phys_0',
+    'SharedUsage=16384',
+    'TotalCommitted=13684736',
+    '',
+  ].join('\r\n');
+
+  assert.deepEqual(parseWmiGpuAdapterMemoryListOutput(output), {
+    memoryUsed: 2377986048 / 1024 ** 2,
+    memoryTotal: null,
+    adapterName: 'luid_0x00000000_0x0016DEE9_phys_0',
+  });
+});
+
+test('parses typeperf GPU adapter memory output and picks the busiest adapter', () => {
+  const output = [
+    '"(PDH-CSV 4.0)","\\\\GEFORCE-NOW\\GPU Adapter Memory(luid_0x00000000_0x0000EEE6_phys_0)\\Dedicated Usage","\\\\GEFORCE-NOW\\GPU Adapter Memory(luid_0x00000000_0x0016DEE9_phys_0)\\Dedicated Usage"',
+    '"10/09/2026 23:00:04.197","0.000000","2350751744.000000"',
+    '"10/09/2026 23:00:05.198","0.000000","2350751744.000000"',
+    '',
+    'The command completed successfully.',
+    '',
+  ].join('\r\n');
+
+  assert.deepEqual(parseTypeperfGpuMemoryOutput(output), {
+    memoryUsed: 2350751744 / 1024 ** 2,
+    memoryTotal: null,
+    adapterName: 'luid_0x00000000_0x0016DEE9_phys_0',
   });
 });

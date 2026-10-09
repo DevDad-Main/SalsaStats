@@ -90,12 +90,23 @@ function parseWmiGpuEngineOutput(output) {
   return Math.round(Math.max(0, Math.min(100, Math.max(...engineUsage.values()))));
 }
 
+function selectMaxMemoryAdapter(adapters) {
+  const usable = adapters.filter(adapter => Number.isFinite(adapter.memoryUsed));
+  if (!usable.length) return {};
+
+  const selected = usable.sort((left, right) => right.memoryUsed - left.memoryUsed)[0];
+  return {
+    memoryUsed: selected.memoryUsed / 1024 ** 2,
+    memoryTotal: null,
+    adapterName: selected.name || null,
+  };
+}
+
 function parseWmiGpuAdapterMemoryOutput(output) {
   const lines = decodeProcessOutput(output).split(/\r?\n/).filter(Boolean);
   const headers = lines[0]?.split(',').map(value => value.trim().toLowerCase()) || [];
   const nameIndex = headers.indexOf('name');
   const usageIndex = headers.indexOf('dedicatedusage');
-  const committedIndex = headers.indexOf('totalcommitted');
   if (usageIndex < 0) return {};
 
   const adapters = lines.slice(1).map(line => {
@@ -103,17 +114,65 @@ function parseWmiGpuAdapterMemoryOutput(output) {
     return {
       name: nameIndex < 0 ? '' : fields[nameIndex],
       memoryUsed: parseOptionalNumber(fields[usageIndex]),
-      totalCommitted: committedIndex < 0 ? null : parseOptionalNumber(fields[committedIndex]),
     };
-  }).filter(adapter => Number.isFinite(adapter.memoryUsed));
+  });
+  return selectMaxMemoryAdapter(adapters);
+}
 
-  const selected = adapters.sort((left, right) => right.memoryUsed - left.memoryUsed)[0];
-  if (!selected) return {};
-  return {
-    memoryUsed: selected.memoryUsed / 1024 ** 2,
-    memoryTotal: null,
-    adapterName: selected.name || null,
-  };
+function parseWmiGpuAdapterMemoryListOutput(output) {
+  const blocks = decodeProcessOutput(output).split(/\r?\n\s*\r?\n/);
+  const adapters = [];
+  for (const block of blocks) {
+    let name = null;
+    let memoryUsed = null;
+    for (const line of block.split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_]+)\s*=\s*(.*?)\s*$/);
+      if (!match) continue;
+      const key = match[1].toLowerCase();
+      if (key === 'name') name = match[2];
+      else if (key === 'dedicatedusage') memoryUsed = parseOptionalNumber(match[2]);
+    }
+    if (name !== null || memoryUsed !== null) adapters.push({ name: name || '', memoryUsed });
+  }
+  return selectMaxMemoryAdapter(adapters);
+}
+
+function parseTypeperfGpuMemoryOutput(output) {
+  const lines = decodeProcessOutput(output)
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.startsWith('"'));
+  if (lines.length < 2) return {};
+
+  const splitRow = line => line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
+  const headers = splitRow(lines[0]);
+  const values = splitRow(lines[1]);
+  const adapters = headers.slice(1).map((header, index) => ({
+    name: header.match(/GPU Adapter Memory\((.+?)\)/i)?.[1] || header,
+    memoryUsed: parseOptionalNumber(values[index + 1]),
+  }));
+  return selectMaxMemoryAdapter(adapters);
+}
+
+async function readGpuAdapterMemory() {
+  const csvOutput = await runGpuCommand('wmic.exe', [
+    'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
+    'get', 'Name,DedicatedUsage,SharedUsage,TotalCommitted', '/format:csv',
+  ]);
+  const csvResult = parseWmiGpuAdapterMemoryOutput(csvOutput);
+  if (Number.isFinite(csvResult.memoryUsed)) return csvResult;
+
+  const listOutput = await runGpuCommand('wmic.exe', [
+    'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
+    'get', '/format:list',
+  ]);
+  const listResult = parseWmiGpuAdapterMemoryListOutput(listOutput);
+  if (Number.isFinite(listResult.memoryUsed)) return listResult;
+
+  const typeperfOutput = await runGpuCommand('typeperf.exe', [
+    '\\GPU Adapter Memory(*)\\Dedicated Usage', '-sc', '1',
+  ]);
+  return parseTypeperfGpuMemoryOutput(typeperfOutput);
 }
 
 async function runGpuCommand(executable, args) {
@@ -261,19 +320,13 @@ function createStatsReader() {
 
     if (!hasPrimaryGpuTelemetry && now - lastGpuCounterRefresh >= GPU_COUNTER_REFRESH_MS) {
       lastGpuCounterRefresh = now;
-      const [engineOutput, memoryOutput] = await Promise.all([
-        runGpuCommand('wmic.exe', [
-          'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
-          'get', 'Name,UtilizationPercentage', '/format:csv',
-        ]),
-        runGpuCommand('wmic.exe', [
-          'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
-          'get', 'Name,DedicatedUsage,SharedUsage,TotalCommitted', '/format:csv',
-        ]),
+      const engineOutput = await runGpuCommand('wmic.exe', [
+        'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
+        'get', 'Name,UtilizationPercentage', '/format:csv',
       ]);
       gpuCounterMetrics = {
         usage: parseWmiGpuEngineOutput(engineOutput),
-        ...parseWmiGpuAdapterMemoryOutput(memoryOutput),
+        ...(await readGpuAdapterMemory()),
       };
       if ([gpuCounterMetrics.usage, gpuCounterMetrics.memoryUsed, gpuCounterMetrics.memoryTotal].some(Number.isFinite)) {
         gpuTelemetrySource = 'wmi-performance-counters';
@@ -339,6 +392,8 @@ function createStatsReader() {
 module.exports = {
   createStatsReader,
   parseNvidiaSmiOutput,
+  parseTypeperfGpuMemoryOutput,
+  parseWmiGpuAdapterMemoryListOutput,
   parseWmiGpuAdapterMemoryOutput,
   parseWmiGpuEngineOutput,
   parseWmiGpuNames,
