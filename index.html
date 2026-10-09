@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; connect-src 'none'">
+  <title>SalsaStats | System Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="window-bar">
+    <span class="brand-mark">S</span>
+    <span class="brand-name">SalsaStats</span>
+    <span class="brand-edition">SYSTEM MONITOR</span>
+    <span class="bar-spacer"></span>
+    <span class="live-state"><span class="live-dot"></span>Live</span>
+    <button class="window-action" id="mode-toggle" type="button" title="Switch to compact view">Compact view</button>
+    <button class="window-action" id="overlay-toggle" type="button" title="Open overlay view">Overlay</button>
+    <button class="window-action" id="customize-toggle" type="button" title="Customize overlay">Customize</button>
+    <button class="window-action" id="pin-toggle" type="button" aria-pressed="false" title="Keep this window above others">Pin</button>
+    <div class="window-controls" aria-label="Window controls">
+      <button class="window-control minimize" id="window-minimize" type="button" aria-label="Minimize window" title="Minimize"></button>
+      <button class="window-control maximize" id="window-toggle-fullscreen" type="button" aria-label="Toggle fullscreen" title="Toggle fullscreen"></button>
+      <button class="window-control close" id="window-close" type="button" aria-label="Close window" title="Close"></button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <section class="intro">
+      <div>
+        <div class="eyebrow">Local performance</div>
+        <h1>Your system, at a glance.</h1>
+      </div>
+      <div class="sample-time" id="sample-time">Waiting for first sample</div>
+    </section>
+
+    <section class="stat-grid" aria-label="System usage">
+      <article class="stat-card cpu-card">
+        <div class="card-top"><span class="card-label">Processor</span><span class="card-index">01 / CPU</span></div>
+        <div class="stat-number"><span id="cpu-value">--</span><small>%</small></div>
+        <div class="stat-detail" id="cpu-name">Reading processor details</div>
+        <div class="meter"><div class="meter-fill" id="cpu-meter"></div></div>
+        <div class="card-footer"><span>Current load</span><span id="cpu-cores">-- cores</span></div>
+      </article>
+
+      <article class="stat-card gpu-card">
+        <div class="card-top"><span class="card-label">Graphics</span><span class="card-index">02 / GPU</span></div>
+        <div class="stat-number"><span id="gpu-value">--</span><small id="gpu-unit">%</small></div>
+        <div class="stat-detail" id="gpu-name">Detecting graphics device</div>
+        <div class="meter"><div class="meter-fill" id="gpu-meter"></div></div>
+        <div class="card-footer"><span id="gpu-load-label">GPU load</span><span id="gpu-temperature">-- C</span></div>
+      </article>
+
+      <article class="stat-card memory-card">
+        <div class="card-top"><span class="card-label">Memory</span><span class="card-index">03 / RAM</span></div>
+        <div class="stat-number"><span id="memory-value">--</span><small>%</small></div>
+        <div class="stat-detail" id="memory-detail">Reading system memory</div>
+        <div class="meter"><div class="meter-fill" id="memory-meter"></div></div>
+        <div class="card-footer"><span>In use</span><span id="memory-total">-- total</span></div>
+      </article>
+    </section>
+
+    <section class="lower-grid">
+      <article class="chart-panel">
+        <div class="chart-heading"><span class="panel-title">Performance history</span><span class="chart-period">Recent samples</span></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background: var(--lime)"></span>CPU</span>
+          <span class="legend-item"><span class="legend-swatch" style="background: var(--mint)"></span>GPU</span>
+        </div>
+        <canvas id="history-chart" aria-label="CPU and GPU usage history"></canvas>
+      </article>
+
+      <article class="fps-panel">
+        <div>
+          <div class="fps-header"><span class="card-label">Game frame rate</span><span class="capture-tag">No capture source</span></div>
+          <div class="fps-value">--<small>FPS</small></div>
+          <div class="fps-note">Game FPS needs a capture source. This app does not inject into games or require administrator access.</div>
+        </div>
+        <div>
+          <div class="fps-divider"></div>
+          <div class="fps-stats">
+            <div><div class="fps-stat-label">Average FPS</div><div class="fps-stat-value">--</div></div>
+            <div><div class="fps-stat-label">1% low</div><div class="fps-stat-value">--</div></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="settings-panel" id="settings-panel" hidden>
+      <div class="settings-heading">
+        <div><div class="eyebrow">Overlay studio</div><h2>Make the OSD yours</h2></div>
+        <button class="window-action" id="settings-close" type="button" title="Close customization">Close</button>
+      </div>
+      <div class="settings-layout">
+        <div class="settings-controls">
+          <section class="settings-group">
+            <h3>GPU</h3>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="gpuTemp">Temperature</label>
+              <label class="check-option"><input type="checkbox" data-setting="gpuUsage">Usage</label>
+              <label class="check-option"><input type="checkbox" data-setting="gpuVram">VRAM</label>
+              <label class="check-option"><input type="checkbox" data-setting="gpuClock">Core clock</label>
+              <label class="check-option"><input type="checkbox" data-setting="gpuPower">Power</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>CPU</h3>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="cpuTemp">Temperature</label>
+              <label class="check-option"><input type="checkbox" data-setting="cpuUsage">Usage</label>
+              <label class="check-option"><input type="checkbox" data-setting="cpuClock">Clock</label>
+              <label class="check-option"><input type="checkbox" data-setting="cpuPower">Power</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>Memory and frame rate</h3>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="memoryUsage">RAM usage</label>
+              <label class="check-option"><input type="checkbox" data-setting="fpsCurrent">Current FPS</label>
+              <label class="check-option"><input type="checkbox" data-setting="fpsAverage">Average FPS</label>
+              <label class="check-option"><input type="checkbox" data-setting="fpsLow">1% low</label>
+              <label class="check-option"><input type="checkbox" data-setting="graphRate">Framerate graph</label>
+              <label class="check-option"><input type="checkbox" data-setting="graphTime">Frametime graph</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>Appearance</h3>
+            <div class="appearance-options">
+              <label class="range-option">Text size <output class="range-output" id="scale-output">100%</output><input id="scale-setting" type="range" min="80" max="140" value="100"></label>
+              <label class="range-option">Panel size <output class="range-output" id="size-output">100%</output><input id="size-setting" type="range" min="70" max="150" value="100"></label>
+              <label class="range-option">Background <output class="range-output" id="opacity-output">88%</output><input id="opacity-setting" type="range" min="0" max="100" value="88"></label>
+              <label class="select-option">OSD style<select id="background-setting"><option value="none">None</option><option value="soft" selected>Soft</option><option value="full">Full</option></select></label>
+              <label class="color-option">GPU color<input type="color" data-color="gpu" value="#50f45d"></label>
+              <label class="color-option">CPU color<input type="color" data-color="cpu" value="#4ea8ff"></label>
+              <label class="color-option">RAM color<input type="color" data-color="memory" value="#ffb65d"></label>
+              <label class="color-option">FPS color<input type="color" data-color="fps" value="#ef49df"></label>
+              <label class="select-option">Screen corner<select id="anchor-setting"><option value="top-left">Top left</option><option value="top-right" selected>Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label>
+            </div>
+          </section>
+        </div>
+        <aside class="preview-wrap">
+          <div class="preview-caption"><span>Live preview</span><span>Current system readings</span></div>
+          <div class="preview-stage" id="preview-stage"></div>
+        </aside>
+      </div>
+      <div class="settings-actions">
+        <div class="log-location">
+          <span>Log folder</span>
+          <code id="logs-path">Loading log folder</code>
+          <span id="logs-status" role="status" aria-live="polite"></span>
+        </div>
+        <button class="window-action" id="choose-logs-folder" type="button">Choose folder</button>
+        <button class="window-action" id="open-logs-folder" type="button">Open logs</button>
+        <button class="window-action" id="settings-overlay" type="button">Open overlay</button>
+      </div>
+    </section>
+
+    <footer class="footer-note"><span>Stats stay on this PC</span><span>Updates every 2 seconds</span></footer>
+  </main>
+
+  <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
+    <div class="osd-shell" id="osd-panel">
+      <div class="osd-topbar osd-tools">
+        <span class="osd-brand">SalsaStats</span><span class="osd-live">LIVE</span><span class="osd-spacer"></span>
+        <button class="osd-control" id="overlay-customize" type="button">SETUP</button>
+        <button class="osd-control" id="overlay-dashboard" type="button">DASHBOARD</button>
+      </div>
+      <section class="osd-group" data-group="gpu">
+        <h2 class="osd-group-title"><span>GPU</span><span class="osd-device-name" data-field="gpuName" title="Detecting graphics device">Detecting graphics device</span></h2>
+        <div class="osd-row" data-row="gpuTemp"><span class="osd-label">GPU Temp</span><span class="osd-value"><span data-field="gpuTemp">--</span><span class="osd-unit">C</span></span></div>
+        <div class="osd-row" data-row="gpuUsage"><span class="osd-label">GPU Usage</span><span class="osd-value"><span data-field="gpuUsage">--</span><span class="osd-unit">%</span></span></div>
+        <div class="osd-row" data-row="gpuVram"><span class="osd-label">GPU VRAM</span><span class="osd-value" data-field="gpuVram">--</span></div>
+        <div class="osd-row" data-row="gpuClock"><span class="osd-label">GPU Clock</span><span class="osd-value" data-field="gpuClock">--</span></div>
+        <div class="osd-row" data-row="gpuPower"><span class="osd-label">GPU Power</span><span class="osd-value" data-field="gpuPower">--</span></div>
+      </section>
+      <section class="osd-group" data-group="cpu">
+        <h2 class="osd-group-title"><span>CPU</span><span class="osd-device-name" data-field="cpuName" title="Detecting processor">Detecting processor</span></h2>
+        <div class="osd-row" data-row="cpuTemp"><span class="osd-label">CPU Temp</span><span class="osd-value"><span data-field="cpuTemp">--</span><span class="osd-unit">C</span></span></div>
+        <div class="osd-row" data-row="cpuUsage"><span class="osd-label">CPU Usage</span><span class="osd-value"><span data-field="cpuUsage">--</span><span class="osd-unit">%</span></span></div>
+        <div class="osd-row" data-row="cpuClock"><span class="osd-label">CPU Clock</span><span class="osd-value" data-field="cpuClock">--</span></div>
+        <div class="osd-row" data-row="cpuPower"><span class="osd-label">CPU Power</span><span class="osd-value" data-field="cpuPower">--</span></div>
+      </section>
+      <section class="osd-group" data-group="memory">
+        <h2 class="osd-group-title">MEMORY</h2>
+        <div class="osd-row" data-row="memoryUsage"><span class="osd-label">RAM Usage</span><span class="osd-value" data-field="memoryUsage">--</span></div>
+      </section>
+      <section class="osd-group" data-group="fps">
+        <h2 class="osd-group-title">FRAMERATE</h2>
+        <div class="osd-row" data-row="fpsCurrent"><span class="osd-label">FPS</span><span class="osd-value" data-field="fpsCurrent">--</span></div>
+        <div class="osd-row" data-row="fpsAverage"><span class="osd-label">AVG</span><span class="osd-value" data-field="fpsAverage">--</span></div>
+        <div class="osd-row" data-row="fpsLow"><span class="osd-label">1% Low</span><span class="osd-value" data-field="fpsLow">--</span></div>
+        <p class="osd-note" data-row="fpsNote">Game capture unavailable</p>
+        <div class="osd-chart-block" data-row="graphRate"><div class="osd-chart-heading"><span>Framerate</span><span>No capture source</span></div><canvas class="osd-chart" data-chart="rate"></canvas></div>
+        <div class="osd-chart-block" data-row="graphTime"><div class="osd-chart-heading"><span>Frametime</span><span>No capture source</span></div><canvas class="osd-chart" data-chart="time"></canvas></div>
+      </section>
+    </div>
+  </section>
+
+  <script src="renderer.js" defer></script>
+</body>
+</html>

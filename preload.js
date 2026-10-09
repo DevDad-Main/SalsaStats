@@ -1,0 +1,32 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+const channels = {
+  setMode: 'window:mode',
+  setAnchor: 'window:anchor',
+  setScale: 'window:scale',
+  moveWindow: 'window:move',
+  minimize: 'window:minimize',
+  toggleFullscreen: 'window:toggle-fullscreen',
+  closeWindow: 'window:close',
+  setPinned: 'window:pin',
+};
+
+contextBridge.exposeInMainWorld('salsaStats', {
+  setMode: mode => ipcRenderer.send(channels.setMode, mode),
+  setAnchor: anchor => ipcRenderer.send(channels.setAnchor, anchor),
+  setScale: scale => ipcRenderer.send(channels.setScale, scale),
+  moveWindow: point => ipcRenderer.send(channels.moveWindow, point),
+  minimize: () => ipcRenderer.send(channels.minimize),
+  toggleFullscreen: () => ipcRenderer.send(channels.toggleFullscreen),
+  closeWindow: () => ipcRenderer.send(channels.closeWindow),
+  setPinned: pinned => ipcRenderer.send(channels.setPinned, pinned),
+  getLogDirectory: () => ipcRenderer.invoke('logs:get-directory'),
+  chooseLogDirectory: () => ipcRenderer.invoke('logs:choose-directory'),
+  openLogDirectory: () => ipcRenderer.invoke('logs:open-directory'),
+  reportError: (message, details, fatal = false) => ipcRenderer.send('renderer:error', { message, details, fatal }),
+  onStatsUpdate: callback => {
+    const listener = (_event, stats) => callback(stats);
+    ipcRenderer.on('stats-update', listener);
+    return () => ipcRenderer.removeListener('stats-update', listener);
+  },
+});

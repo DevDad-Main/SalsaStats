@@ -1,0 +1,63 @@
+{
+  "name": "salsastats",
+  "version": "1.0.0",
+  "description": "SalsaStats desktop PC monitor",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js",
+    "test": "node --test",
+    "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File build/create-icon.ps1 && node build/package-icon.js",
+    "build:win": "npm run build:icon && npm run check && npm test && electron-builder --win nsis --x64 --publish never"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "systeminformation": "^5.18.6"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "overrides": {
+    "@electron/get": "5.1.0",
+    "tar": "7.5.21"
+  },
+  "build": {
+    "appId": "com.salsastats.desktop",
+    "productName": "SalsaStats",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "logger.js",
+      "stats.js",
+      "preload.js",
+      "renderer.js",
+      "styles.css",
+      "index.html",
+      "loading.gif",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}",
+      "requestedExecutionLevel": "asInvoker",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SalsaStats"
+    }
+  }
+}
