@@ -1,4 +1,7 @@
     const statsApi = window.salsaStats;
+    const updateBanner = document.getElementById('update-banner');
+    const updateMessage = document.getElementById('update-message');
+    const updateInstall = document.getElementById('update-install');
     window.addEventListener('error', event => {
       event.preventDefault();
       statsApi?.reportError?.('Uncaught renderer error', {
@@ -348,6 +351,25 @@
       requestAnimationFrame(() => settingsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
 
+    function renderUpdateState(state) {
+      if (!state || ['idle', 'checking', 'current'].includes(state.status)) {
+        updateBanner.hidden = true;
+        return;
+      }
+
+      updateInstall.hidden = state.status !== 'downloaded';
+      if (state.status === 'available') updateMessage.textContent = `SalsaStats ${state.version} is available and downloading.`;
+      else if (state.status === 'downloading') updateMessage.textContent = `Downloading SalsaStats ${state.version || 'update'}: ${state.percent || 0}%.`;
+      else if (state.status === 'downloaded') updateMessage.textContent = `SalsaStats ${state.version} is ready to install.`;
+      else updateMessage.textContent = 'Could not check for updates. SalsaStats will try again later.';
+      updateBanner.hidden = false;
+    }
+
+    const unsubscribeUpdates = statsApi.onUpdateState?.(renderUpdateState);
+    statsApi.getUpdateState?.().then(renderUpdateState).catch(() => {});
+    updateInstall.addEventListener('click', () => statsApi.installUpdate?.());
+    document.getElementById('update-later').addEventListener('click', () => { updateBanner.hidden = true; });
+
     async function refreshLogDirectory() {
       if (!statsApi?.getLogDirectory) return;
       try {
@@ -421,4 +443,5 @@
     new ResizeObserver(() => refreshCharts()).observe(chart);
     document.addEventListener('visibilitychange', refreshCharts);
     window.addEventListener('beforeunload', unsubscribeStats, { once: true });
+    if (unsubscribeUpdates) window.addEventListener('beforeunload', unsubscribeUpdates, { once: true });
     applySettings();

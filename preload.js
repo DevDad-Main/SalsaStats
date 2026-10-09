@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('salsaStats', {
   chooseLogDirectory: () => ipcRenderer.invoke('logs:choose-directory'),
   openLogDirectory: () => ipcRenderer.invoke('logs:open-directory'),
   reportError: (message, details, fatal = false) => ipcRenderer.send('renderer:error', { message, details, fatal }),
+  getUpdateState: () => ipcRenderer.invoke('updates:get-state'),
+  installUpdate: () => ipcRenderer.send('updates:install'),
+  onUpdateState: callback => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('updates:state', listener);
+    return () => ipcRenderer.removeListener('updates:state', listener);
+  },
   onStatsUpdate: callback => {
     const listener = (_event, stats) => callback(stats);
     ipcRenderer.on('stats-update', listener);

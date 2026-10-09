@@ -1,5 +1,6 @@
 const path = require('node:path');
 const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
 
@@ -10,11 +11,13 @@ const OVERLAY_MIN_WIDTH = 300;
 const OVERLAY_MIN_HEIGHT = 390;
 const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const readStats = createStatsReader();
 const logger = createLogger({ fallbackDirectory: path.join(process.cwd(), 'logs') });
 
 let mainWindow;
 let statsTimer;
+let updateCheckTimer;
 let statsInFlight = false;
 let shutdownTimer;
 let fatalDialogTimer;
@@ -26,6 +29,8 @@ let isShuttingDown = false;
 let fatalDialogOpen = false;
 let appExitCode = 0;
 let isWindowClosing = false;
+let initialHardwareSampleLogged = false;
+let currentUpdateState = { status: 'idle' };
 
 function initializeLogging() {
   const userData = app.getPath('userData');
@@ -38,7 +43,9 @@ function initializeLogging() {
 function stopBackgroundWork() {
   isQuitting = true;
   clearTimeout(statsTimer);
+  clearInterval(updateCheckTimer);
   statsTimer = null;
+  updateCheckTimer = null;
 }
 
 function requestShutdown(exitCode = 0) {
@@ -161,6 +168,53 @@ function registerLogHandlers() {
   });
 }
 
+function publishUpdateState(status, details = {}) {
+  currentUpdateState = { status, ...details };
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
+    mainWindow.webContents.send('updates:state', currentUpdateState);
+  }
+}
+
+function registerUpdateHandlers() {
+  ipcMain.handle('updates:get-state', event => (
+    isTrustedRenderer(event) ? currentUpdateState : { status: 'idle' }
+  ));
+
+  ipcMain.on('updates:install', event => {
+    if (!isTrustedRenderer(event) || currentUpdateState.status !== 'downloaded') return;
+    autoUpdater.quitAndInstall(false, true);
+  });
+}
+
+function configureAutoUpdates() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.on('checking-for-update', () => publishUpdateState('checking'));
+  autoUpdater.on('update-available', info => publishUpdateState('available', { version: info.version }));
+  autoUpdater.on('update-not-available', () => publishUpdateState('current'));
+  autoUpdater.on('download-progress', progress => publishUpdateState('downloading', {
+    percent: Math.round(progress.percent),
+  }));
+  autoUpdater.on('update-downloaded', info => publishUpdateState('downloaded', { version: info.version }));
+  autoUpdater.on('error', error => {
+    logger.writeSync('warn', 'Automatic update failed.', error);
+    publishUpdateState('error');
+  });
+
+  const checkForUpdates = () => {
+    autoUpdater.checkForUpdates().catch(error => {
+      logger.writeSync('warn', 'Unable to check for updates.', error);
+      publishUpdateState('error');
+    });
+  };
+  checkForUpdates();
+  updateCheckTimer = setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS);
+  updateCheckTimer.unref();
+}
+
 process.on('uncaughtException', error => {
   showFatalError('An uncaught main-process exception occurred.', error);
 });
@@ -246,6 +300,13 @@ function registerWindowHandler(channel, handler) {
   });
 }
 
+function applyWindowStacking() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const overlay = currentMode === 'overlay';
+  mainWindow.setAlwaysOnTop(overlay || pinned, overlay ? 'screen-saver' : 'floating');
+  if (overlay) mainWindow.moveTop();
+}
+
 registerWindowHandler('window:mode', mode => {
   currentMode = ['compact', 'overlay'].includes(mode) ? mode : 'full';
   if (currentMode === 'compact') {
@@ -259,7 +320,7 @@ registerWindowHandler('window:mode', mode => {
     mainWindow.setSize(1040, 720, true);
     mainWindow.center();
   }
-  mainWindow.setAlwaysOnTop(currentMode === 'overlay' || pinned);
+  applyWindowStacking();
   positionOverlay();
 });
 
@@ -294,7 +355,7 @@ registerWindowHandler('window:toggle-fullscreen', () => mainWindow.setFullScreen
 registerWindowHandler('window:close', () => mainWindow.close());
 registerWindowHandler('window:pin', shouldPin => {
   pinned = shouldPin === true;
-  mainWindow.setAlwaysOnTop(pinned || currentMode === 'overlay');
+  applyWindowStacking();
 });
 
 async function sampleStats() {
@@ -302,6 +363,16 @@ async function sampleStats() {
   statsInFlight = true;
   try {
     const stats = await readStats();
+    if (!initialHardwareSampleLogged) {
+      logger.writeSync('info', 'Initial system telemetry sample.', {
+        cpuName: stats.cpu.name,
+        cpuCores: stats.cpu.cores,
+        gpuName: stats.gpu.name,
+        gpuTelemetryAvailable: stats.gpu.usage !== null,
+        gpuAdapters: stats.gpu.detectedAdapters,
+      });
+      initialHardwareSampleLogged = true;
+    }
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
       mainWindow.webContents.send('stats-update', stats);
     }
@@ -337,6 +408,8 @@ app.on('child-process-gone', (_event, details) => {
 app.whenReady().then(() => {
   initializeLogging();
   registerLogHandlers();
+  registerUpdateHandlers();
+  configureAutoUpdates();
   createWindow();
   sampleStats();
 
