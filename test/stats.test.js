@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   parseNvidiaSmiOutput,
+  parseWmiGpuAdapterMemoryOutput,
+  parseWmiGpuEngineOutput,
   parseWmiGpuNames,
   resolveCpuName,
   selectGpuController,
@@ -79,4 +81,28 @@ test('parses NVIDIA-SMI utilization and sensor readings', () => {
   assert.equal(parseNvidiaSmiOutput(
     'NVIDIA GeForce RTX 5080, N/A, N/A, N/A, N/A, N/A, N/A',
   ).utilizationGpu, null);
+});
+
+test('aggregates WMI GPU engine utilization by adapter and engine type', () => {
+  const output = [
+    'Node,Name,UtilizationPercentage',
+    'GFN,GEFORCE-NOW,pid_812_luid_0x0000_phys_0_eng_8_engtype_3D,20',
+    'GFN,AnotherProcess,pid_912_luid_0x0000_phys_0_eng_9_engtype_3D,35',
+    'GFN,GEFORCE-NOW,pid_812_luid_0x0000_phys_0_eng_10_engtype_VideoDecode,12',
+  ].join('\r\n');
+
+  assert.equal(parseWmiGpuEngineOutput(output), 55);
+  assert.equal(parseWmiGpuEngineOutput('Node,Name,UtilizationPercentage\r\n'), null);
+});
+
+test('converts WMI dedicated GPU memory counters from bytes to MiB', () => {
+  const output = [
+    'Node,Name,DedicatedLimit,DedicatedUsage,SharedUsage',
+    'GFN,luid_0x0000_phys_0,17179869184,2147483648,0',
+  ].join('\r\n');
+
+  assert.deepEqual(parseWmiGpuAdapterMemoryOutput(output), {
+    memoryTotal: 16384,
+    memoryUsed: 2048,
+  });
 });

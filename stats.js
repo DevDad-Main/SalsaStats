@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 
 const SENSOR_REFRESH_MS = 5000;
 const GPU_REFRESH_MS = 15000;
+const GPU_COUNTER_REFRESH_MS = 5000;
 const VIRTUAL_GPU_PATTERN = /microsoft basic display adapter|vnc mirror driver|virtual|remote display|indirect display/i;
 
 function resolveCpuName(cpuInfo, systemCpuModel) {
@@ -66,6 +67,44 @@ function parseNvidiaSmiOutput(output) {
     powerDraw: parseOptionalNumber(power),
     clockCore: parseOptionalNumber(clock),
   };
+}
+
+function parseWmiGpuEngineOutput(output) {
+  const engineUsage = new Map();
+  for (const line of decodeProcessOutput(output).split(/\r?\n/)) {
+    const separator = line.lastIndexOf(',');
+    if (separator < 0) continue;
+    const utilization = parseOptionalNumber(line.slice(separator + 1));
+    if (utilization === null) continue;
+
+    const fields = line.slice(0, separator).split(',');
+    const instanceName = fields.slice(1).join(',');
+    const engineType = instanceName.match(/engtype_([^,\s]+)/i)?.[1];
+    if (!engineType) continue;
+    const adapter = instanceName.match(/luid_(.+?)_phys_(\d+)/i);
+    const key = `${adapter ? `${adapter[1]}:${adapter[2]}` : 'gpu'}:${engineType.toLowerCase()}`;
+    engineUsage.set(key, (engineUsage.get(key) || 0) + utilization);
+  }
+
+  if (!engineUsage.size) return null;
+  return Math.round(Math.max(0, Math.min(100, Math.max(...engineUsage.values()))));
+}
+
+function parseWmiGpuAdapterMemoryOutput(output) {
+  const adapters = [];
+  for (const line of decodeProcessOutput(output).split(/\r?\n/)) {
+    const fields = line.split(',');
+    if (fields.length < 5) continue;
+    const dedicatedLimit = parseOptionalNumber(fields[fields.length - 3]);
+    const dedicatedUsage = parseOptionalNumber(fields[fields.length - 2]);
+    if (dedicatedLimit === null && dedicatedUsage === null) continue;
+    adapters.push({
+      memoryTotal: dedicatedLimit === null ? null : dedicatedLimit / 1024 ** 2,
+      memoryUsed: dedicatedUsage === null ? null : dedicatedUsage / 1024 ** 2,
+    });
+  }
+
+  return adapters.sort((left, right) => (right.memoryTotal || 0) - (left.memoryTotal || 0))[0] || {};
 }
 
 async function runGpuCommand(executable, args) {
@@ -151,8 +190,11 @@ function createStatsReader() {
   let gpuControllers = [];
   let gpuWmiAdapters = [];
   let gpuSmiController = {};
+  let gpuCounterMetrics = { usage: null, memoryUsed: null, memoryTotal: null };
   let gpuTelemetrySource = 'unavailable';
+  let hasPrimaryGpuTelemetry = false;
   let lastGpuRefresh = 0;
+  let lastGpuCounterRefresh = 0;
 
   return async function readStats() {
     const [load, memory] = await Promise.all([
@@ -202,9 +244,31 @@ function createStatsReader() {
         ? await readWmiGpuNames()
         : [];
       gpuSmiController = systemTelemetry ? {} : await readNvidiaSmiMetrics();
+      hasPrimaryGpuTelemetry = systemTelemetry || Object.values(gpuSmiController).some(Number.isFinite);
       gpuTelemetrySource = systemTelemetry
         ? 'systeminformation'
-        : Object.values(gpuSmiController).some(Number.isFinite) ? 'nvidia-smi' : 'unavailable';
+        : hasPrimaryGpuTelemetry ? 'nvidia-smi' : 'unavailable';
+    }
+
+    if (!hasPrimaryGpuTelemetry && now - lastGpuCounterRefresh >= GPU_COUNTER_REFRESH_MS) {
+      lastGpuCounterRefresh = now;
+      const [engineOutput, memoryOutput] = await Promise.all([
+        runGpuCommand('wmic.exe', [
+          'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
+          'get', 'Name,UtilizationPercentage', '/format:csv',
+        ]),
+        runGpuCommand('wmic.exe', [
+          'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
+          'get', 'Name,DedicatedLimit,DedicatedUsage,SharedUsage', '/format:csv',
+        ]),
+      ]);
+      gpuCounterMetrics = {
+        usage: parseWmiGpuEngineOutput(engineOutput),
+        ...parseWmiGpuAdapterMemoryOutput(memoryOutput),
+      };
+      if ([gpuCounterMetrics.usage, gpuCounterMetrics.memoryUsed, gpuCounterMetrics.memoryTotal].some(Number.isFinite)) {
+        gpuTelemetrySource = 'wmi-performance-counters';
+      }
     }
 
     return {
@@ -224,14 +288,14 @@ function createStatsReader() {
         name: gpuController.model || gpuController.name
           || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
           || 'Graphics device not detected',
-        usage: firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu) === null
+        usage: firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage) === null
           ? null
-          : Math.round(firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu)),
+          : Math.round(firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage)),
         temperature: firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu) === null
           ? null
           : Math.round(firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu)),
-        memoryUsed: firstFinite(gpuController.memoryUsed, gpuSmiController.memoryUsed),
-        memoryTotal: firstFinite(gpuController.memoryTotal, gpuSmiController.memoryTotal),
+        memoryUsed: firstFinite(gpuController.memoryUsed, gpuSmiController.memoryUsed, gpuCounterMetrics.memoryUsed),
+        memoryTotal: firstFinite(gpuController.memoryTotal, gpuSmiController.memoryTotal, gpuCounterMetrics.memoryTotal),
         clock: firstFinite(gpuController.clockCore, gpuSmiController.clockCore) === null
           ? null
           : Math.round(firstFinite(gpuController.clockCore, gpuSmiController.clockCore)),
@@ -266,6 +330,8 @@ function createStatsReader() {
 module.exports = {
   createStatsReader,
   parseNvidiaSmiOutput,
+  parseWmiGpuAdapterMemoryOutput,
+  parseWmiGpuEngineOutput,
   parseWmiGpuNames,
   resolveCpuName,
   selectGpuController,
