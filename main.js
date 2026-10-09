@@ -186,7 +186,7 @@ function registerUpdateHandlers() {
 
   ipcMain.on('updates:install', event => {
     if (!isTrustedRenderer(event) || currentUpdateState.status !== 'downloaded') return;
-    autoUpdater.quitAndInstall(false, true);
+    autoUpdater.quitAndInstall(true, true);
   });
 }
 
