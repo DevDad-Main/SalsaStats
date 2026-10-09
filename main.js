@@ -394,6 +394,12 @@ async function sampleStats() {
         gpuName: stats.gpu.name,
         gpuTelemetryAvailable: stats.gpu.usage !== null,
         gpuTelemetrySource: stats.gpu.telemetrySource,
+        gpuUsage: stats.gpu.usage,
+        gpuMemoryUsedMiB: stats.gpu.memoryUsed,
+        gpuMemoryTotalMiB: stats.gpu.memoryTotal,
+        gpuTemperatureC: stats.gpu.temperature,
+        gpuPowerW: stats.gpu.power,
+        gpuClockMHz: stats.gpu.clock,
         gpuAdapters: stats.gpu.detectedAdapters,
       });
       initialHardwareSampleLogged = true;

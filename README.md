@@ -19,7 +19,7 @@ The installer is unsigned. Windows SmartScreen may show a reputation warning, an
 - Full dashboard, compact view, and a configurable always-on-top overlay
 - Local rotating logs and recovery options for application errors
 
-Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available. If Electron's hardware library returns no GPU, SalsaStats silently queries Windows WMI for adapter names and GPU-engine/VRAM counters, then tries NVIDIA-SMI for additional readings. Missing commands or unsupported sensors are treated as unavailable, not fatal errors. WMI counters do not provide GPU temperature or board power.
+Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available. If Electron's hardware library returns no GPU, SalsaStats silently queries Windows WMI for adapter names and GPU-engine/VRAM counters, then tries NVIDIA-SMI for additional readings. Missing commands or unsupported sensors are treated as unavailable, not fatal errors. WMI counters do not provide GPU temperature or board power, and may not expose total VRAM.
 
 ## Overlay
 

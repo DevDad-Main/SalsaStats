@@ -292,8 +292,10 @@
 
       setField('gpuTemp', stats.gpu.temperature === null ? '--' : stats.gpu.temperature);
       setField('gpuUsage', stats.gpu.usage === null ? '--' : stats.gpu.usage);
-      setField('gpuVram', stats.gpu.memoryUsed && stats.gpu.memoryTotal
-        ? `${Math.round(stats.gpu.memoryUsed)} / ${Math.round(stats.gpu.memoryTotal)} MB`
+      setField('gpuVram', Number.isFinite(stats.gpu.memoryUsed)
+        ? Number.isFinite(stats.gpu.memoryTotal)
+          ? `${Math.round(stats.gpu.memoryUsed)} / ${Math.round(stats.gpu.memoryTotal)} MiB`
+          : `${Math.round(stats.gpu.memoryUsed)} MiB used`
         : 'Unavailable');
       setField('gpuClock', stats.gpu.clock === null ? 'Unavailable' : `${stats.gpu.clock} MHz`);
       setField('gpuPower', stats.gpu.power === null ? 'Unavailable' : `${stats.gpu.power.toFixed(1)} W`);

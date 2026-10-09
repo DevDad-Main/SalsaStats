@@ -97,12 +97,13 @@ test('aggregates WMI GPU engine utilization by adapter and engine type', () => {
 
 test('converts WMI dedicated GPU memory counters from bytes to MiB', () => {
   const output = [
-    'Node,Name,DedicatedLimit,DedicatedUsage,SharedUsage',
-    'GFN,luid_0x0000_phys_0,17179869184,2147483648,0',
+    'Node,Name,DedicatedUsage,SharedUsage,TotalCommitted',
+    'GFN,luid_0x0000_phys_0,2147483648,0,2147483648',
   ].join('\r\n');
 
   assert.deepEqual(parseWmiGpuAdapterMemoryOutput(output), {
-    memoryTotal: 16384,
     memoryUsed: 2048,
+    memoryTotal: null,
+    adapterName: 'luid_0x0000_phys_0',
   });
 });

@@ -91,20 +91,29 @@ function parseWmiGpuEngineOutput(output) {
 }
 
 function parseWmiGpuAdapterMemoryOutput(output) {
-  const adapters = [];
-  for (const line of decodeProcessOutput(output).split(/\r?\n/)) {
-    const fields = line.split(',');
-    if (fields.length < 5) continue;
-    const dedicatedLimit = parseOptionalNumber(fields[fields.length - 3]);
-    const dedicatedUsage = parseOptionalNumber(fields[fields.length - 2]);
-    if (dedicatedLimit === null && dedicatedUsage === null) continue;
-    adapters.push({
-      memoryTotal: dedicatedLimit === null ? null : dedicatedLimit / 1024 ** 2,
-      memoryUsed: dedicatedUsage === null ? null : dedicatedUsage / 1024 ** 2,
-    });
-  }
+  const lines = decodeProcessOutput(output).split(/\r?\n/).filter(Boolean);
+  const headers = lines[0]?.split(',').map(value => value.trim().toLowerCase()) || [];
+  const nameIndex = headers.indexOf('name');
+  const usageIndex = headers.indexOf('dedicatedusage');
+  const committedIndex = headers.indexOf('totalcommitted');
+  if (usageIndex < 0) return {};
 
-  return adapters.sort((left, right) => (right.memoryTotal || 0) - (left.memoryTotal || 0))[0] || {};
+  const adapters = lines.slice(1).map(line => {
+    const fields = line.split(',');
+    return {
+      name: nameIndex < 0 ? '' : fields[nameIndex],
+      memoryUsed: parseOptionalNumber(fields[usageIndex]),
+      totalCommitted: committedIndex < 0 ? null : parseOptionalNumber(fields[committedIndex]),
+    };
+  }).filter(adapter => Number.isFinite(adapter.memoryUsed));
+
+  const selected = adapters.sort((left, right) => right.memoryUsed - left.memoryUsed)[0];
+  if (!selected) return {};
+  return {
+    memoryUsed: selected.memoryUsed / 1024 ** 2,
+    memoryTotal: null,
+    adapterName: selected.name || null,
+  };
 }
 
 async function runGpuCommand(executable, args) {
@@ -259,7 +268,7 @@ function createStatsReader() {
         ]),
         runGpuCommand('wmic.exe', [
           'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
-          'get', 'Name,DedicatedLimit,DedicatedUsage,SharedUsage', '/format:csv',
+          'get', 'Name,DedicatedUsage,SharedUsage,TotalCommitted', '/format:csv',
         ]),
       ]);
       gpuCounterMetrics = {
