@@ -19,7 +19,7 @@ The installer is unsigned. Windows SmartScreen may show a reputation warning, an
 - Full dashboard, compact view, and a configurable always-on-top overlay
 - Local rotating logs and recovery options for application errors
 
-Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available.
+Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available. If Electron's hardware library returns no GPU, SalsaStats silently queries Windows WMI for adapter names and tries NVIDIA-SMI for supported live readings; missing commands or unsupported sensors are treated as unavailable, not fatal errors.
 
 ## Overlay
 
@@ -35,7 +35,7 @@ If a game provides its own FPS counter, it may be visible in the streamed image,
 
 Packaged builds check GitHub Releases at startup and every six hours. Updates download in the background; SalsaStats offers a restart button after the download completes and will not restart in the middle of a session. Existing v1.0.0 installs must be manually upgraded to v1.0.2 once; v1.0.2 is the first published release with the updater.
 
-Logs default to `%APPDATA%\salsastats\logs`. Change or open the log folder from **Customize** under **Log folder**. Logs are JSON Lines, rotate at 2 MB, and retain up to three backups. A one-time startup record includes detected CPU/GPU names and adapter availability to help diagnose remote-session differences. Hardware readings and error logs stay on the PC; update checks contact GitHub.
+Logs default to `%APPDATA%\salsastats\logs`. Change or open the log folder from **Customize** under **Log folder**. Logs are JSON Lines, rotate at 2 MB, and retain up to three backups. A one-time startup record includes detected CPU/GPU names, adapters, and the telemetry source to help diagnose remote-session differences. Hardware readings and error logs stay on the PC; update checks contact GitHub.
 
 ## Build And Test
 

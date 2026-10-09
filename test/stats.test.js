@@ -1,6 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { resolveCpuName, selectGpuController } = require('../stats');
+const {
+  parseNvidiaSmiOutput,
+  parseWmiGpuNames,
+  resolveCpuName,
+  selectGpuController,
+  selectPhysicalGpuName,
+} = require('../stats');
 
 test('uses the operating system CPU model when systeminformation omits the brand', () => {
   assert.equal(resolveCpuName({ brand: '', manufacturer: 'AMD' }, 'AMD Ryzen 7 Processor'), 'AMD Ryzen 7 Processor');
@@ -40,4 +46,37 @@ test('does not report a virtual display driver as the GPU', () => {
     { vendor: 'RealVNC', model: 'VNC Mirror Driver' },
     { vendor: 'Microsoft', model: 'Microsoft Basic Display Adapter' },
   ]), {});
+});
+
+test('parses WMI names and selects the physical adapter', () => {
+  const names = parseWmiGpuNames([
+    'Node=GFN-SESSION',
+    'Name=RealVNC VNC Mirror Driver',
+    'Name=Microsoft Basic Display Adapter',
+    'Name=NVIDIA GeForce RTX 5080',
+  ].join('\r\n'));
+
+  assert.deepEqual(names, [
+    'RealVNC VNC Mirror Driver',
+    'Microsoft Basic Display Adapter',
+    'NVIDIA GeForce RTX 5080',
+  ]);
+  assert.equal(selectPhysicalGpuName(names), 'NVIDIA GeForce RTX 5080');
+});
+
+test('parses NVIDIA-SMI utilization and sensor readings', () => {
+  assert.deepEqual(parseNvidiaSmiOutput(
+    'NVIDIA GeForce RTX 5080, 45, 62, 1234, 16384, 120.5, 1820\r\n',
+  ), {
+    name: 'NVIDIA GeForce RTX 5080',
+    utilizationGpu: 45,
+    temperatureGpu: 62,
+    memoryUsed: 1234,
+    memoryTotal: 16384,
+    powerDraw: 120.5,
+    clockCore: 1820,
+  });
+  assert.equal(parseNvidiaSmiOutput(
+    'NVIDIA GeForce RTX 5080, N/A, N/A, N/A, N/A, N/A, N/A',
+  ).utilizationGpu, null);
 });

@@ -1,5 +1,11 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const os = require('node:os');
 const systeminformation = require('systeminformation');
+
+const execFileAsync = promisify(execFile);
 
 const SENSOR_REFRESH_MS = 5000;
 const GPU_REFRESH_MS = 15000;
@@ -7,6 +13,105 @@ const VIRTUAL_GPU_PATTERN = /microsoft basic display adapter|vnc mirror driver|v
 
 function resolveCpuName(cpuInfo, systemCpuModel) {
   return cpuInfo.brand || systemCpuModel || cpuInfo.manufacturer || 'Processor';
+}
+
+function decodeProcessOutput(output) {
+  const buffer = Buffer.isBuffer(output) ? output : Buffer.from(String(output || ''), 'utf8');
+  if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString('utf16le').replace(/^\uFEFF/, '');
+  }
+
+  const sample = buffer.subarray(0, Math.min(buffer.length, 512));
+  let zeroEven = 0;
+  let zeroOdd = 0;
+  for (let index = 0; index < sample.length; index += 1) {
+    if (sample[index] === 0) {
+      if (index % 2 === 0) zeroEven += 1;
+      else zeroOdd += 1;
+    }
+  }
+  if (zeroOdd > sample.length / 10 && zeroOdd > zeroEven) return buffer.toString('utf16le').replace(/^\uFEFF/, '');
+  return buffer.toString('utf8').replace(/^\uFEFF/, '');
+}
+
+function parseWmiGpuNames(output) {
+  return decodeProcessOutput(output)
+    .split(/\r?\n/)
+    .map(line => line.match(/^\s*Name\s*=\s*(.*?)\s*$/i)?.[1])
+    .filter(Boolean);
+}
+
+function selectPhysicalGpuName(names) {
+  return names.find(name => !VIRTUAL_GPU_PATTERN.test(name)) || null;
+}
+
+function parseOptionalNumber(value) {
+  if (!value || /^n\/a$/i.test(value.trim())) return null;
+  const number = Number(value.trim());
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseNvidiaSmiOutput(output) {
+  const row = decodeProcessOutput(output).split(/\r?\n/).map(line => line.trim()).find(Boolean);
+  if (!row) return {};
+
+  const [name, usage, temperature, memoryUsed, memoryTotal, power, clock] = row.split(',').map(value => value.trim());
+  if (!name) return {};
+  return {
+    name,
+    utilizationGpu: parseOptionalNumber(usage),
+    temperatureGpu: parseOptionalNumber(temperature),
+    memoryUsed: parseOptionalNumber(memoryUsed),
+    memoryTotal: parseOptionalNumber(memoryTotal),
+    powerDraw: parseOptionalNumber(power),
+    clockCore: parseOptionalNumber(clock),
+  };
+}
+
+async function runGpuCommand(executable, args) {
+  try {
+    const result = await execFileAsync(executable, args, {
+      encoding: 'buffer',
+      timeout: 3000,
+      windowsHide: true,
+      maxBuffer: 128 * 1024,
+    });
+    return decodeProcessOutput(result.stdout);
+  } catch {
+    return '';
+  }
+}
+
+async function readWmiGpuNames() {
+  const output = await runGpuCommand('wmic.exe', [
+    'path', 'Win32_VideoController', 'get', 'Name', '/format:list',
+  ]);
+  return parseWmiGpuNames(output);
+}
+
+async function readNvidiaSmiMetrics() {
+  const programFiles = process.env.ProgramW6432 || process.env.ProgramFiles;
+  const candidates = [
+    process.env.NVIDIA_SMI_PATH,
+    programFiles && path.join(programFiles, 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
+    process.env.SystemRoot && path.join(process.env.SystemRoot, 'System32', 'nvidia-smi.exe'),
+    'nvidia-smi.exe',
+  ].filter(Boolean);
+  const args = [
+    '--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.gr',
+    '--format=csv,noheader,nounits',
+  ];
+
+  for (const executable of [...new Set(candidates)]) {
+    if (path.isAbsolute(executable) && !fs.existsSync(executable)) continue;
+    const metrics = parseNvidiaSmiOutput(await runGpuCommand(executable, args));
+    if (metrics.name) return metrics;
+  }
+  return {};
+}
+
+function firstFinite(...values) {
+  return values.find(Number.isFinite) ?? null;
 }
 
 function selectGpuController(controllers) {
@@ -44,6 +149,9 @@ function createStatsReader() {
   let lastCpuSensorRefresh = 0;
   let gpuController = {};
   let gpuControllers = [];
+  let gpuWmiAdapters = [];
+  let gpuSmiController = {};
+  let gpuTelemetrySource = 'unavailable';
   let lastGpuRefresh = 0;
 
   return async function readStats() {
@@ -81,6 +189,22 @@ function createStatsReader() {
         gpuControllers = [];
         gpuController = {};
       }
+
+      const systemTelemetry = [
+        gpuController.utilizationGpu,
+        gpuController.temperatureGpu,
+        gpuController.memoryTotal,
+        gpuController.memoryUsed,
+        gpuController.clockCore,
+        gpuController.powerDraw,
+      ].some(Number.isFinite);
+      gpuWmiAdapters = !gpuController.model && !gpuController.name
+        ? await readWmiGpuNames()
+        : [];
+      gpuSmiController = systemTelemetry ? {} : await readNvidiaSmiMetrics();
+      gpuTelemetrySource = systemTelemetry
+        ? 'systeminformation'
+        : Object.values(gpuSmiController).some(Number.isFinite) ? 'nvidia-smi' : 'unavailable';
     }
 
     return {
@@ -97,34 +221,53 @@ function createStatsReader() {
         usage: memory.total ? Math.round((memory.used / memory.total) * 100) : 0,
       },
       gpu: {
-        name: gpuController.model || gpuController.name || 'Graphics device not detected',
-        usage: Number.isFinite(gpuController.utilizationGpu)
-          ? Math.round(gpuController.utilizationGpu)
-          : null,
-        temperature: Number.isFinite(gpuController.temperatureGpu)
-          ? Math.round(gpuController.temperatureGpu)
-          : null,
-        memoryUsed: gpuController.memoryUsed || null,
-        memoryTotal: gpuController.memoryTotal || null,
-        clock: Number.isFinite(gpuController.clockCore) ? Math.round(gpuController.clockCore) : null,
-        power: Number.isFinite(gpuController.powerDraw) ? gpuController.powerDraw : null,
-        detectedAdapters: gpuControllers.map(controller => ({
-          vendor: controller.vendor || null,
-          model: controller.model || null,
-          name: controller.name || null,
-          hasTelemetry: [
-            controller.utilizationGpu,
-            controller.temperatureGpu,
-            controller.memoryTotal,
-            controller.memoryUsed,
-            controller.clockCore,
-            controller.powerDraw,
-          ].some(Number.isFinite),
-        })),
+        name: gpuController.model || gpuController.name
+          || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
+          || 'Graphics device not detected',
+        usage: firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu) === null
+          ? null
+          : Math.round(firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu)),
+        temperature: firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu) === null
+          ? null
+          : Math.round(firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu)),
+        memoryUsed: firstFinite(gpuController.memoryUsed, gpuSmiController.memoryUsed),
+        memoryTotal: firstFinite(gpuController.memoryTotal, gpuSmiController.memoryTotal),
+        clock: firstFinite(gpuController.clockCore, gpuSmiController.clockCore) === null
+          ? null
+          : Math.round(firstFinite(gpuController.clockCore, gpuSmiController.clockCore)),
+        power: firstFinite(gpuController.powerDraw, gpuSmiController.powerDraw),
+        telemetrySource: gpuTelemetrySource,
+        detectedAdapters: [
+          ...gpuControllers.map(controller => ({
+            vendor: controller.vendor || null,
+            model: controller.model || null,
+            name: controller.name || null,
+            source: 'systeminformation',
+            hasTelemetry: [
+              controller.utilizationGpu,
+              controller.temperatureGpu,
+              controller.memoryTotal,
+              controller.memoryUsed,
+              controller.clockCore,
+              controller.powerDraw,
+            ].some(Number.isFinite),
+          })),
+          ...gpuWmiAdapters.map(name => ({ name, model: name, source: 'wmic', hasTelemetry: false })),
+          ...(gpuSmiController.name
+            ? [{ name: gpuSmiController.name, model: gpuSmiController.name, source: 'nvidia-smi', hasTelemetry: gpuTelemetrySource === 'nvidia-smi' }]
+            : []),
+        ],
       },
       sampledAt: now,
     };
   };
 }
 
-module.exports = { createStatsReader, resolveCpuName, selectGpuController };
+module.exports = {
+  createStatsReader,
+  parseNvidiaSmiOutput,
+  parseWmiGpuNames,
+  resolveCpuName,
+  selectGpuController,
+  selectPhysicalGpuName,
+};
