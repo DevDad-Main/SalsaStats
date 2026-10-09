@@ -1,4 +1,4 @@
-# SalsaStats 1.0.4
+# SalsaStats 1.0.5
 
 ## What's new
 
@@ -7,11 +7,12 @@
 - Fall back to the Windows CPU model when the hardware library does not provide a CPU brand.
 - Reassert the overlay's topmost position every second and when it loses focus, without activating it.
 - Run future NSIS updates silently and relaunch SalsaStats after installation.
+- Make aggressive fullscreen-game overlay raising optional to avoid disrupting games.
 - Add startup adapter diagnostics to the local log for troubleshooting remote sessions.
 - Refresh the README with installation, update, logging, and GeForce NOW/FPS guidance.
 
 ## Install and update
 
-Download `SalsaStats-1.0.4-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested. Existing v1.0.0 installations need one manual upgrade to v1.0.2 first. The first update from v1.0.3 may still show its installer because that version requested the visible installer UI; subsequent updates install silently and restart SalsaStats.
+Download `SalsaStats-1.0.5-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested. Existing v1.0.0 installations need one manual upgrade to v1.0.2 first. The first update from v1.0.3 may still show its installer because that version requested the visible installer UI; subsequent updates install silently and restart SalsaStats.
 
 The installer is unsigned. SmartScreen or managed-device application-control policies may still warn or block it.

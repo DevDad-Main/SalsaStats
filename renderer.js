@@ -45,6 +45,7 @@
       opacity: 88,
       backgroundMode: 'soft',
       anchor: 'top-right',
+      overlayAboveGames: false,
     };
 
     let settings = defaultSettings;
@@ -118,6 +119,7 @@
       document.getElementById('opacity-output').textContent = `${settings.opacity}%`;
       document.getElementById('background-setting').value = settings.backgroundMode;
       document.getElementById('anchor-setting').value = settings.anchor;
+      document.getElementById('overlay-above-games').checked = settings.overlayAboveGames === true;
       drawOsdCharts();
     }
 
@@ -161,6 +163,11 @@
       saveSettings();
       statsApi.setAnchor(settings.anchor);
     });
+    document.getElementById('overlay-above-games').addEventListener('change', event => {
+      settings.overlayAboveGames = event.target.checked;
+      saveSettings();
+      statsApi.setOverlayAboveGames(settings.overlayAboveGames);
+    });
 
     function formatBytes(bytes) {
       if (!Number.isFinite(bytes) || bytes <= 0) return '--';
@@ -181,12 +188,16 @@
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       const width = bounds.width;
       const height = bounds.height;
-      const inset = { top: 8, right: 6, bottom: 8, left: 6 };
+      const inset = { top: 8, right: 8, bottom: 18, left: 34 };
       const plotWidth = width - inset.left - inset.right;
       const plotHeight = height - inset.top - inset.bottom;
 
       context.clearRect(0, 0, width, height);
       context.lineWidth = 1;
+      context.font = '9px "Segoe UI", sans-serif';
+      context.textAlign = 'right';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#8b978d';
       context.strokeStyle = 'rgba(139, 151, 141, .15)';
       for (let line = 0; line <= 4; line += 1) {
         const y = inset.top + (plotHeight * line) / 4;
@@ -194,7 +205,14 @@
         context.moveTo(inset.left, y);
         context.lineTo(width - inset.right, y);
         context.stroke();
+        context.fillText(`${100 - line * 25}%`, inset.left - 6, y);
       }
+
+      context.textBaseline = 'bottom';
+      context.textAlign = 'left';
+      context.fillText('older', inset.left, height - 1);
+      context.textAlign = 'right';
+      context.fillText('now', width - inset.right, height - 1);
 
       const drawSeries = (key, color) => {
         const values = samples.map(sample => sample[key]);
@@ -444,4 +462,5 @@
     document.addEventListener('visibilitychange', refreshCharts);
     window.addEventListener('beforeunload', unsubscribeStats, { once: true });
     if (unsubscribeUpdates) window.addEventListener('beforeunload', unsubscribeUpdates, { once: true });
+    statsApi.setOverlayAboveGames(settings.overlayAboveGames);
     applySettings();

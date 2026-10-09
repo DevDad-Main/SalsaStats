@@ -23,7 +23,7 @@ Hardware availability depends on what Windows and the installed drivers expose. 
 
 ## Overlay
 
-Choose **Overlay** in the dashboard. Use **Setup** in the overlay to adjust its size, position, colors, and displayed metrics. The overlay uses a high topmost window level and does not take focus when raised, but Windows or a game using protected/exclusive-fullscreen presentation can still cover ordinary desktop overlays.
+Choose **Overlay** in the dashboard. Use **Setup** in the overlay to adjust its size, position, colors, and displayed metrics. Normal mode stays above ordinary windows without repeatedly raising itself. If a fullscreen game covers it, enable **Customize → Window behavior → Force above fullscreen games**. That stronger mode reasserts the overlay position and can disrupt games that react badly to focus/z-order changes; turn it off if a game minimizes or closes. Windows protected/exclusive-fullscreen presentation may still cover any desktop overlay.
 
 ## GeForce NOW And FPS
 

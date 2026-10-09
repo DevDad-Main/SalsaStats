@@ -25,6 +25,7 @@ let shutdownTimer;
 let fatalDialogTimer;
 let currentMode = 'full';
 let pinned = false;
+let overlayAboveGames = false;
 let overlayAnchor = 'top-right';
 let isQuitting = false;
 let isShuttingDown = false;
@@ -290,7 +291,7 @@ function createWindow() {
     window.show();
   });
   window.on('blur', () => {
-    if (mainWindow === window && currentMode === 'overlay' && !isQuitting) window.moveTop();
+    if (mainWindow === window && currentMode === 'overlay' && overlayAboveGames && !isQuitting) window.moveTop();
   });
   window.on('close', () => {
     isWindowClosing = true;
@@ -312,14 +313,15 @@ function registerWindowHandler(channel, handler) {
 function applyWindowStacking() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const overlay = currentMode === 'overlay';
-  mainWindow.setAlwaysOnTop(overlay || pinned, overlay ? 'screen-saver' : 'floating');
-  if (overlay) mainWindow.moveTop();
+  const forceAboveGames = overlay && overlayAboveGames;
+  mainWindow.setAlwaysOnTop(overlay || pinned, forceAboveGames ? 'screen-saver' : 'floating');
+  if (forceAboveGames) mainWindow.moveTop();
 }
 
 function syncOverlayZOrderMaintenance() {
   clearInterval(overlayZOrderTimer);
   overlayZOrderTimer = null;
-  if (currentMode !== 'overlay' || isQuitting) return;
+  if (currentMode !== 'overlay' || !overlayAboveGames || isQuitting) return;
 
   overlayZOrderTimer = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible() || currentMode !== 'overlay') return;
@@ -444,4 +446,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+registerWindowHandler('window:overlay-above-games', shouldRaise => {
+  overlayAboveGames = shouldRaise === true;
+  applyWindowStacking();
+  syncOverlayZOrderMaintenance();
 });

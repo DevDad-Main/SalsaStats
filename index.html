@@ -67,12 +67,12 @@
 
     <section class="lower-grid">
       <article class="chart-panel">
-        <div class="chart-heading"><span class="panel-title">Performance history</span><span class="chart-period">Recent samples</span></div>
+        <div class="chart-heading"><span class="panel-title">Performance history</span><span class="chart-period">Last 48 samples · percent</span></div>
         <div class="chart-legend">
           <span class="legend-item"><span class="legend-swatch" style="background: var(--lime)"></span>CPU</span>
           <span class="legend-item"><span class="legend-swatch" style="background: var(--mint)"></span>GPU</span>
         </div>
-        <canvas id="history-chart" aria-label="CPU and GPU usage history"></canvas>
+        <canvas id="history-chart" aria-label="CPU and GPU usage percentages over the last 48 samples, from 0 to 100 percent"></canvas>
       </article>
 
       <article class="fps-panel">
@@ -141,6 +141,11 @@
               <label class="color-option">FPS color<input type="color" data-color="fps" value="#ef49df"></label>
               <label class="select-option">Screen corner<select id="anchor-setting"><option value="top-left">Top left</option><option value="top-right" selected>Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label>
             </div>
+          </section>
+          <section class="settings-group">
+            <h3>Window behavior</h3>
+            <label class="check-option"><input id="overlay-above-games" type="checkbox">Force above fullscreen games</label>
+            <p class="setting-note">May steal focus or disrupt some games. Leave off if a game minimizes or closes.</p>
           </section>
         </div>
         <aside class="preview-wrap">
