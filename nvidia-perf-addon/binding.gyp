@@ -7,9 +7,6 @@
         "<!@(node -p \"require('node-addon-api').include\")",
         "include"
       ],
-      "libraries": [
-        "nvapi64.lib"
-      ],
       "cflags!": [ "-fno-exceptions" ],
       "cflags_cc!": [ "-fno-exceptions" ],
       "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS" ],
@@ -17,14 +14,7 @@
         "VCCLCompilerTool": {
           "AdditionalOptions": [ "/std:c++17" ]
         }
-      },
-      "conditions": [
-        [ "OS=='win'", {
-          "link_settings": {
-            "libraries": [ "nvapi64.lib", "version.lib" ]
-          }
-        }]
-      ]
+      }
     }
   ]
 }
