@@ -251,6 +251,34 @@ function selectGpuController(controllers) {
     .sort((left, right) => right.score - left.score || left.index - right.index)[0].controller;
 }
 
+// Parses `wmic ... /format:csv` output into one object per row.
+function parseWmiCsv(output) {
+  const lines = String(output || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const header = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const fields = line.split(',');
+    return Object.fromEntries(header.map((name, index) => [name, fields[index]]));
+  });
+}
+
+// Network (Mbps) and disk (MB/s) throughput from Windows performance counters.
+async function readIoCounters() {
+  const [network, disk] = await Promise.all([
+    runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_Tcpip_NetworkInterface', 'get', 'BytesReceivedPersec,BytesSentPersec,Name', '/format:csv']),
+    runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk', 'get', 'DiskReadBytesPersec,DiskWriteBytesPersec,Name', '/format:csv']),
+  ]);
+  const adapters = parseWmiCsv(network).filter(row => row.Name && !/isatap|loopback|teredo|pseudo/i.test(row.Name));
+  const total = parseWmiCsv(disk).find(row => row.Name === '_Total');
+  const sum = key => adapters.reduce((value, row) => value + (Number(row[key]) || 0), 0);
+  return {
+    netInMbps: adapters.length ? (sum('BytesReceivedPersec') * 8) / 1e6 : null,
+    netOutMbps: adapters.length ? (sum('BytesSentPersec') * 8) / 1e6 : null,
+    diskReadMBps: total ? Number(total.DiskReadBytesPersec) / 1048576 : null,
+    diskWriteMBps: total ? Number(total.DiskWriteBytesPersec) / 1048576 : null,
+  };
+}
+
 function createStatsReader() {
   let cpuInfo;
   let cpuSensors = { temperature: null, clock: null };
@@ -264,6 +292,8 @@ function createStatsReader() {
   let hasPrimaryGpuTelemetry = false;
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
+  let lastIoRefresh = 0;
+  let ioCache = { netInMbps: null, netOutMbps: null, diskReadMBps: null, diskWriteMBps: null };
 
   return async function readStats() {
     const [load, memory] = await Promise.all([
@@ -391,10 +421,20 @@ function createStatsReader() {
       if (!hasPrimaryGpuTelemetry) gpuTelemetrySource = 'nvapi';
     }
 
+    if (now - lastIoRefresh >= 3000) {
+      lastIoRefresh = now;
+      try {
+        ioCache = await readIoCounters();
+      } catch {
+        // Counters are optional.
+      }
+    }
+
     return {
       cpu: {
         name: resolveCpuName(cpuInfo, os.cpus().find(cpu => cpu.model)?.model),
         cores: cpuInfo.physicalCores || cpuInfo.cores || 0,
+        perCore: Array.isArray(load.cpus) ? load.cpus.map(core => Math.round(core.load || 0)) : [],
         usage: Math.round(load.currentLoad || 0),
         temperature: cpuSensors.temperature,
         clock: cpuSensors.clock,
@@ -412,9 +452,11 @@ function createStatsReader() {
         memoryTotal: gpuMemTotal,
         clock: gpuClock === null ? null : Math.round(gpuClock),
         power: gpuPower,
+        encoder: Number.isFinite(nvapiGpu?.videoEngine) ? Math.round(nvapiGpu.videoEngine) : null,
         telemetrySource: gpuTelemetrySource,
         detectedAdapters,
       },
+      io: ioCache,
       sampledAt: now,
     };
   };
@@ -422,6 +464,7 @@ function createStatsReader() {
 
 module.exports = {
   createStatsReader,
+  parseWmiCsv,
   parseNvidiaSmiOutput,
   parseTypeperfGpuMemoryOutput,
   parseWmiGpuAdapterMemoryListOutput,

@@ -157,3 +157,10 @@ test('parses typeperf GPU adapter memory output and picks the busiest adapter', 
     adapterName: 'luid_0x00000000_0x0016DEE9_phys_0',
   });
 });
+test('parses wmic csv output into rows', () => {
+  const { parseWmiCsv } = require('../stats');
+  const rows = parseWmiCsv('Node,DiskReadBytesPersec,DiskWriteBytesPersec,Name\r\nPC,1048576,2097152,_Total\r\n');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].Name, '_Total');
+  assert.equal(Number(rows[0].DiskReadBytesPersec), 1048576);
+});

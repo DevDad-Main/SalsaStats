@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('salsaStats', {
   resetKeybinds: () => ipcRenderer.invoke('keybinds:reset'),
   listDirectory: directory => ipcRenderer.invoke('fs:list', directory),
   scanGames: directory => ipcRenderer.invoke('fs:scan', directory),
+  detectGames: () => ipcRenderer.invoke('games:detect'),
+  setAutoOverlay: (enabled, running) => ipcRenderer.invoke('overlay:auto', enabled, running),
+  getLogin: () => ipcRenderer.invoke('app:get-login'),
+  setLogin: enabled => ipcRenderer.invoke('app:set-login', enabled),
+  copyImage: rect => ipcRenderer.invoke('clipboard:image', rect),
+  setNetwork: (enabled, host) => ipcRenderer.invoke('network:set', enabled, host),
   onShortcut: callback => {
     const listener = (_event, action) => callback(action);
     ipcRenderer.on('shortcut', listener);

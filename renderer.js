@@ -36,6 +36,8 @@
         gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true,
         cpuTemp: true, cpuUsage: true, cpuClock: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
+        netPing: false, netJitter: false, netLoss: false,
+        encoderLoad: false, diskRead: false, diskWrite: false, netIn: false, netOut: false,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -53,6 +55,9 @@
       minimalRows: { fpsCurrent: true, gpuUsage: true, gpuTemp: true, cpuUsage: true },
       minimalLook: { scale: 100, size: 100, spacing: 0, opacity: 88, backgroundMode: 'soft', border: true },
       hideUnavailable: true,
+      network: { enabled: false, host: '1.1.1.1' },
+      startInOverlay: false,
+      autoOverlay: false,
     };
 
     let settings = JSON.parse(JSON.stringify(defaultSettings));
@@ -69,6 +74,7 @@
           games: Array.isArray(saved.games) ? saved.games : [],
           minimalRows: { ...defaultSettings.minimalRows, ...saved.minimalRows },
           minimalLook: { ...defaultSettings.minimalLook, ...saved.minimalLook },
+          network: { ...defaultSettings.network, ...saved.network },
         };
       }
     } catch (error) {
@@ -212,6 +218,10 @@
       document.getElementById('opacity-output').textContent = `${E.opacity}%`;
       document.getElementById('background-setting').value = E.backgroundMode;
       document.getElementById('border-setting').checked = E.border !== false;
+      document.getElementById('net-enabled').checked = settings.network.enabled;
+      document.getElementById('net-host').value = settings.network.host;
+      document.getElementById('start-overlay').checked = settings.startInOverlay === true;
+      document.getElementById('auto-overlay').checked = settings.autoOverlay === true;
       document.querySelectorAll('[data-min]').forEach(input => {
         const value = E.minimalLook[input.dataset.min];
         if (input.type === 'checkbox') input.checked = value !== false;
@@ -271,6 +281,21 @@
         if (document.body.classList.contains('overlay')) statsApi.setScale(lookOf(appliedProfile()).size);
       });
     });
+    function syncNetwork() {
+      statsApi.setNetwork?.(settings.network.enabled, settings.network.host);
+    }
+    document.getElementById('net-enabled').addEventListener('change', event => {
+      settings.network.enabled = event.target.checked;
+      saveSettings();
+      syncNetwork();
+    });
+    document.getElementById('net-host').addEventListener('change', event => {
+      settings.network.host = event.target.value.trim() || '1.1.1.1';
+      event.target.value = settings.network.host;
+      saveSettings();
+      syncNetwork();
+    });
+    syncNetwork();
     document.getElementById('border-setting').addEventListener('change', event => {
       editTarget().border = event.target.checked;
       saveSettings();
@@ -564,7 +589,23 @@
     });
     document.getElementById('picker-scan-back').addEventListener('click', () => {
       scanResults = null;
-      renderPicker();
+      openFolder(pickerListing.path || '');
+    });
+    document.getElementById('game-detect').addEventListener('click', async () => {
+      gameStatus.textContent = '';
+      picker.showModal();
+      pickerListing = { path: '', parent: null, entries: [] };
+      scanResults = [];
+      renderCrumbs();
+      renderScan(false);
+      pickerStatus.textContent = 'Looking for installed games...';
+      const result = await statsApi.detectGames().catch(() => null);
+      scanResults = ((result && result.games) || []).map(game => {
+        const known = settings.games.some(item => exeKey(item.exe) === exeKey(game.exe));
+        return { ...game, known, selected: !known };
+      });
+      renderScan(false);
+      if (!scanResults.length) pickerStatus.textContent = 'No installed games found. Use Add game to pick a folder or .exe.';
     });
     document.getElementById('picker-select-all').addEventListener('click', () => {
       scanResults.forEach(game => { game.selected = !game.known; });
@@ -705,9 +746,22 @@
 
     var frametimes = [];
     var lastFrames = null;
+    var lastGameSeen = 0;
+    var gameRunning = false;
+    var lastStats = null;
+
+    function syncAutoOverlay() {
+      statsApi.setAutoOverlay?.(settings.autoOverlay, gameRunning);
+    }
 
     function renderFrames(frames) {
       lastFrames = frames;
+      if (frames?.fps) lastGameSeen = Date.now();
+      const running = Date.now() - lastGameSeen < 20000;
+      if (running !== gameRunning) {
+        gameRunning = running;
+        syncAutoOverlay();
+      }
       const raw = frames?.fps;
       const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
       const matched = raw ? matchGame(raw.application) : null;
@@ -835,7 +889,30 @@
       setField('cpuClock', stats.cpu.clock === null ? 'Unavailable' : `${stats.cpu.clock} MHz`);
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
+      const net = stats.network;
+      const netText = value => (Number.isFinite(value) ? String(Math.round(value)) : '--');
+      setField('netPing', netText(net?.pingMs));
+      setField('netJitter', netText(net?.jitterMs));
+      setField('netLoss', net ? String(net.lossPct) : '--');
+      trackSession(stats);
+      lastStats = stats;
+      const io = stats.io || {};
+      const oneDecimal = value => (Number.isFinite(value) ? value.toFixed(1) : '--');
+      setField('encoderLoad', Number.isFinite(stats.gpu.encoder) ? String(stats.gpu.encoder) : '--');
+      setField('netIn', oneDecimal(io.netInMbps));
+      setField('netOut', oneDecimal(io.netOutMbps));
+      setField('diskRead', oneDecimal(io.diskReadMBps));
+      setField('diskWrite', oneDecimal(io.diskWriteMBps));
+      renderCoreBars(stats.cpu.perCore || []);
       const unavailable = {
+        encoderLoad: !Number.isFinite(stats.gpu.encoder),
+        netIn: !Number.isFinite(io.netInMbps),
+        netOut: !Number.isFinite(io.netOutMbps),
+        diskRead: !Number.isFinite(io.diskReadMBps),
+        diskWrite: !Number.isFinite(io.diskWriteMBps),
+        netPing: !net || net.pingMs === null,
+        netJitter: !net || net.jitterMs === null,
+        netLoss: !net,
         gpuTemp: stats.gpu.temperature === null,
         gpuClock: stats.gpu.clock === null,
         gpuVram: !Number.isFinite(stats.gpu.memoryUsed),
@@ -1320,6 +1397,169 @@
         list.append(item);
       });
     }
+
+    function renderCoreBars(cores) {
+      const box = document.getElementById('core-bars');
+      while (box.childElementCount < cores.length) {
+        const bar = document.createElement('span');
+        bar.className = 'core-bar';
+        bar.append(document.createElement('i'));
+        box.append(bar);
+      }
+      while (box.childElementCount > cores.length) box.lastElementChild.remove();
+      [...box.children].forEach((bar, index) => {
+        bar.firstElementChild.style.height = `${Math.max(4, cores[index])}%`;
+        bar.title = `Core ${index + 1}: ${cores[index]}%`;
+      });
+    }
+
+    // Share: readings as text, or the live preview as an image.
+    function buildShareText() {
+      const stats = lastStats;
+      if (!stats) return '';
+      const fps = lastFrames?.fps;
+      const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
+      const game = fps ? ((matchGame(fps.application) || {}).name || fps.displayName || fps.application) : null;
+      const lines = [`SalsaStats${game ? ` \u2014 ${game}` : ''}`];
+      const gpu = [stats.gpu.name];
+      if (stats.gpu.temperature !== null) gpu.push(`${stats.gpu.temperature} C`);
+      if (stats.gpu.usage !== null) gpu.push(`${stats.gpu.usage}%`);
+      if (Number.isFinite(stats.gpu.memoryUsed)) gpu.push(`${Math.round(stats.gpu.memoryUsed)} MiB VRAM`);
+      if (stats.gpu.clock !== null) gpu.push(`${stats.gpu.clock} MHz`);
+      lines.push(`GPU: ${gpu.join(' \u00b7 ')}`);
+      lines.push(`CPU: ${stats.cpu.name} \u00b7 ${stats.cpu.usage}%`);
+      lines.push(`RAM: ${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`);
+      if (fps) lines.push(`FPS: ${Math.min(fps.current, cap)} (avg ${Math.min(fps.average, cap)}, 1% low ${Math.min(fps.low, cap)})`);
+      if (stats.network && Number.isFinite(stats.network.pingMs)) lines.push(`Ping: ${Math.round(stats.network.pingMs)} ms, jitter ${Math.round(stats.network.jitterMs || 0)} ms, loss ${stats.network.lossPct}%`);
+      return lines.join('\n');
+    }
+    const shareStatus = document.getElementById('share-status');
+    document.getElementById('share-text').addEventListener('click', async () => {
+      const text = buildShareText();
+      const copied = text ? await statsApi.copyText(text).catch(() => false) : false;
+      shareStatus.textContent = copied ? 'Copied the readings.' : 'No readings yet.';
+    });
+    document.getElementById('share-image').addEventListener('click', async () => {
+      const box = previewStage.getBoundingClientRect();
+      const copied = await statsApi.copyImage({ x: box.x, y: box.y, width: box.width, height: box.height }).catch(() => false);
+      shareStatus.textContent = copied ? 'Copied the preview image.' : 'Could not copy the image.';
+    });
+
+    document.getElementById('auto-overlay').addEventListener('change', event => {
+      settings.autoOverlay = event.target.checked;
+      saveSettings();
+      syncAutoOverlay();
+    });
+    document.getElementById('start-overlay').addEventListener('change', event => {
+      settings.startInOverlay = event.target.checked;
+      saveSettings();
+    });
+    const loginBox = document.getElementById('login-enabled');
+    statsApi.getLogin?.().then(enabled => { loginBox.checked = enabled === true; }).catch(() => {});
+    loginBox.addEventListener('change', async () => {
+      const ok = await statsApi.setLogin(loginBox.checked).catch(() => false);
+      if (!ok) loginBox.checked = !loginBox.checked;
+    });
+    setTimeout(() => {
+      syncAutoOverlay();
+      if (settings.startInOverlay) setMode('overlay');
+    }, 800);
+
+    // Session history: one record per game run, kept locally.
+    const SESSION_KEY = 'salsastats-sessions';
+    const IDLE_MS = 15000;
+    let session = null;
+    const loadSessions = () => {
+      try {
+        return JSON.parse(localStorage.getItem(SESSION_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    };
+
+    function renderSessions() {
+      const list = document.getElementById('session-list');
+      const sessions = loadSessions();
+      list.textContent = '';
+      document.getElementById('session-empty').hidden = sessions.length > 0;
+      sessions.forEach(item => {
+        const row = document.createElement('li');
+        row.className = 'session-row';
+        const title = document.createElement('div');
+        title.className = 'session-title';
+        const name = document.createElement('strong');
+        name.textContent = item.name;
+        const when = document.createElement('span');
+        when.textContent = `${new Date(item.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} \u00b7 ${item.minutes} min`;
+        title.append(name, when);
+        const stats = document.createElement('div');
+        stats.className = 'session-stats';
+        const parts = [`Avg ${item.avgFps} FPS`, `1% low ${item.low}`];
+        if (item.peakTemp !== null) parts.push(`Peak ${item.peakTemp} C`);
+        if (item.peakVram !== null) parts.push(`VRAM ${(item.peakVram / 1024).toFixed(1)} GB`);
+        if (item.avgPing !== null) parts.push(`Ping ${item.avgPing} ms`);
+        stats.textContent = parts.join('  \u00b7  ');
+        row.append(title, stats);
+        list.append(row);
+      });
+    }
+
+    function endSession() {
+      if (!session) return;
+      const done = session;
+      session = null;
+      const seconds = (done.last - done.started) / 1000;
+      if (done.count < 8 || seconds < 60) return;
+      const sessions = loadSessions();
+      sessions.unshift({
+        name: done.name,
+        date: done.started,
+        minutes: Math.max(1, Math.round(seconds / 60)),
+        avgFps: Math.round(done.fpsSum / done.count),
+        low: Math.round(done.lowSum / done.count),
+        peakTemp: done.peakTemp,
+        peakVram: done.peakVram,
+        avgPing: done.pingCount ? Math.round(done.pingSum / done.pingCount) : null,
+      });
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions.slice(0, 40)));
+      renderSessions();
+    }
+
+    function trackSession(stats) {
+      const now = Date.now();
+      const fps = stats.frames?.fps;
+      if (!fps) {
+        if (session && now - session.last > IDLE_MS) endSession();
+        return;
+      }
+      const key = exeKey(fps.application);
+      if (session && session.key !== key) endSession();
+      const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
+      if (!session) {
+        const matched = matchGame(fps.application);
+        session = {
+          key, name: (matched && matched.name) || fps.displayName || fps.application,
+          started: now, last: now, count: 0, fpsSum: 0, lowSum: 0, peakTemp: null, peakVram: null, pingSum: 0, pingCount: 0,
+        };
+      }
+      session.last = now;
+      session.count += 1;
+      session.fpsSum += Math.min(fps.current, cap);
+      session.lowSum += Math.min(fps.low, cap);
+      if (Number.isFinite(stats.gpu.temperature)) session.peakTemp = Math.max(session.peakTemp ?? 0, stats.gpu.temperature);
+      if (Number.isFinite(stats.gpu.memoryUsed)) session.peakVram = Math.max(session.peakVram ?? 0, stats.gpu.memoryUsed);
+      if (Number.isFinite(stats.network?.pingMs)) {
+        session.pingSum += stats.network.pingMs;
+        session.pingCount += 1;
+      }
+    }
+
+    document.getElementById('sessions-clear').addEventListener('click', () => {
+      localStorage.removeItem(SESSION_KEY);
+      renderSessions();
+    });
+    window.addEventListener('beforeunload', endSession);
+    renderSessions();
 
     statsApi.getKeybinds?.().then(data => data && renderKeybinds(data.shortcuts)).catch(() => {});
     document.getElementById('keybind-reset').addEventListener('click', async () => {

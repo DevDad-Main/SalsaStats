@@ -6,6 +6,7 @@ const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
 const nvidiaPerf = require('./nvidia-perf');
 const { createPresentMonCapture, resolvePresentMonPath } = require('./presentmon');
+const { createNetworkProbe } = require('./network');
 
 const SAMPLE_INTERVAL_MS = 2000;
 const OVERLAY_BASE_WIDTH = 340;
@@ -37,6 +38,18 @@ let isWindowClosing = false;
 let initialHardwareSampleLogged = false;
 let currentUpdateState = { status: 'idle' };
 let frameCapture;
+let autoOverlay = false;
+let gameActive = false;
+
+function applyAutoOverlay() {
+  if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
+  if (!autoOverlay || gameActive) {
+    if (!mainWindow.isVisible()) mainWindow.showInactive();
+  } else if (mainWindow.isVisible()) {
+    mainWindow.hide();
+  }
+}
+const networkProbe = createNetworkProbe();
 let overlayEditMode = false;
 let overlayCustomPosition = null;
 
@@ -51,6 +64,7 @@ function initializeLogging() {
 function stopBackgroundWork() {
   isQuitting = true;
   frameCapture?.stop();
+  networkProbe.stop();
   nvidiaPerf.stop();
   clearTimeout(statsTimer);
   clearInterval(overlayZOrderTimer);
@@ -247,7 +261,110 @@ function scanGames(root) {
   return { games, truncated };
 }
 
+// Looks for installed games in Steam libraries, common game folders and Epic's manifests.
+function detectGames() {
+  const roots = new Set();
+  const steamHomes = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles]
+    .filter(Boolean)
+    .map(base => path.join(base, 'Steam'));
+  for (const steam of steamHomes) {
+    roots.add(path.join(steam, 'steamapps', 'common'));
+    try {
+      const text = fs.readFileSync(path.join(steam, 'steamapps', 'libraryfolders.vdf'), 'utf8');
+      for (const match of text.matchAll(/"path"\s+"([^"]+)"/g)) {
+        roots.add(path.join(match[1].replace(/\\\\/g, '\\'), 'steamapps', 'common'));
+      }
+    } catch {
+      // Steam is not installed here.
+    }
+  }
+  for (let code = 67; code <= 90; code += 1) {
+    const drive = `${String.fromCharCode(code)}:\\`;
+    if (!fs.existsSync(drive)) continue;
+    ['SteamLibrary\\steamapps\\common', 'Games', 'Epic Games', 'GOG Games', 'XboxGames'].forEach(relative => roots.add(path.join(drive, relative)));
+  }
+
+  const seen = new Set();
+  const games = [];
+  const add = game => {
+    const key = game.exe.toLowerCase();
+    if (seen.has(key) || /redist|steamworks|steamvr|proton|runtime/i.test(game.name)) return;
+    seen.add(key);
+    games.push(game);
+  };
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    try {
+      scanGames(root).games.forEach(add);
+    } catch {
+      // Unreadable library folder.
+    }
+  }
+
+  const manifests = path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests');
+  try {
+    for (const file of fs.readdirSync(manifests)) {
+      if (!file.endsWith('.item')) continue;
+      const item = JSON.parse(fs.readFileSync(path.join(manifests, file), 'utf8'));
+      if (item.LaunchExecutable && item.DisplayName) {
+        add({ name: String(item.DisplayName), exe: path.basename(item.LaunchExecutable), path: path.join(item.InstallLocation || '', item.LaunchExecutable) });
+      }
+    }
+  } catch {
+    // Epic is not installed here.
+  }
+  return { games: games.slice(0, 300), truncated: false };
+}
+
 function registerLogHandlers() {
+  ipcMain.handle('overlay:auto', (event, enabled, running) => {
+    if (!isTrustedRenderer(event)) return false;
+    autoOverlay = enabled === true;
+    gameActive = running === true;
+    applyAutoOverlay();
+    return true;
+  });
+
+  ipcMain.handle('app:get-login', event => (isTrustedRenderer(event) ? app.getLoginItemSettings().openAtLogin : false));
+
+  ipcMain.handle('app:set-login', (event, enabled) => {
+    if (!isTrustedRenderer(event) || !app.isPackaged) return false;
+    app.setLoginItemSettings({ openAtLogin: enabled === true });
+    return true;
+  });
+
+  ipcMain.handle('clipboard:image', async (event, rect) => {
+    if (!isTrustedRenderer(event) || !rect) return false;
+    const area = ['x', 'y', 'width', 'height'].map(key => Math.round(Number(rect[key])));
+    if (area.some(value => !Number.isFinite(value)) || area[2] < 1 || area[3] < 1) return false;
+    try {
+      const image = await mainWindow.webContents.capturePage({ x: area[0], y: area[1], width: area[2], height: area[3] });
+      if (image.isEmpty()) return false;
+      clipboard.writeImage(image);
+      return true;
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to copy an image.', error);
+      return false;
+    }
+  });
+  ipcMain.handle('games:detect', event => {
+    if (!isTrustedRenderer(event)) return null;
+    try {
+      return detectGames();
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to detect installed games.', error);
+      return { games: [], truncated: false };
+    }
+  });
+
+  ipcMain.handle('network:set', (event, enabled, host) => {
+    if (!isTrustedRenderer(event)) return false;
+    if (enabled !== true) {
+      networkProbe.stop();
+      return true;
+    }
+    return networkProbe.start(String(host || '1.1.1.1').trim());
+  });
   ipcMain.handle('fs:scan', (event, directory) => {
     if (!isTrustedRenderer(event) || !directory) return null;
     try {
@@ -529,6 +646,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The overlay must keep updating while it is hidden between games.
+      backgroundThrottling: false,
     },
   });
 
@@ -628,6 +747,7 @@ registerWindowHandler('window:mode', mode => {
   applyWindowStacking();
   syncOverlayZOrderMaintenance();
   positionOverlay();
+  applyAutoOverlay();
 });
 
 registerWindowHandler('window:anchor', (anchor, reset) => {
@@ -689,6 +809,7 @@ async function sampleStats() {
   try {
     const stats = await readStats();
     stats.frames = frameCapture ? frameCapture.getSnapshot() : { status: 'missing', message: '', fps: null };
+    stats.network = networkProbe.getStats();
     if (!initialHardwareSampleLogged) {
       logger.writeSync('info', 'Initial system telemetry sample.', {
         cpuName: stats.cpu.name,

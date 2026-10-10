@@ -41,6 +41,7 @@ internal static class NvapiHelper
 
         var temperature = Try(() => gpu.ThermalInformation.ThermalSensors.Select(s => (double?)s.CurrentTemperature).FirstOrDefault());
         var usage = Try(() => gpu.UsageInformation.GPU.Percentage);
+        var videoEngine = Try(() => gpu.UsageInformation.VideoEngine.Percentage);
         var clock = Try(() => gpu.CurrentClockFrequencies.GraphicsClock.Frequency / 1000.0);
         var memoryClock = Try(() => gpu.CurrentClockFrequencies.MemoryClock.Frequency / 1000.0);
         var memoryTotal = Try(() => gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0);
@@ -51,6 +52,7 @@ internal static class NvapiHelper
         return "{\"name\":" + Str(name)
             + ",\"temperature\":" + Num(temperature)
             + ",\"utilization\":" + Num(usage)
+            + ",\"videoEngine\":" + Num(videoEngine)
             + ",\"clockGraphics\":" + Num(clock)
             + ",\"clockMemory\":" + Num(memoryClock)
             + ",\"memoryUsed\":" + Num(memoryUsed)

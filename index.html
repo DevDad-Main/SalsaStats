@@ -51,6 +51,7 @@
         <div class="stat-number"><span id="cpu-value">--</span><small>%</small></div>
         <div class="stat-detail" id="cpu-name">Reading processor details</div>
         <div class="meter"><div class="meter-fill" id="cpu-meter"></div></div>
+        <div class="core-bars" id="core-bars" aria-label="Per-core CPU load"></div>
         <div class="card-footer"><span>Current load</span><span id="cpu-cores">-- cores</span></div>
       </article>
 
@@ -102,6 +103,7 @@
       <div class="settings-heading">
         <div><div class="eyebrow">Library</div><h2>Your games</h2></div>
         <div class="button-row">
+          <button class="window-action" id="game-detect" type="button" title="Look for games installed through Steam, Epic and common folders">Find installed games</button>
           <button class="window-action" id="game-current" type="button">Add running game</button>
           <button class="window-action primary" id="game-browse" type="button">Add game...</button>
         </div>
@@ -109,7 +111,13 @@
       <p class="setting-note">Add a game to give it a proper name and its own overlay layout. SalsaStats switches to that layout automatically while the game is running.</p>
       <p class="setting-note game-status" id="game-status" role="status" aria-live="polite"></p>
       <ul class="game-library" id="game-library"></ul>
-      <p class="setting-note" id="game-empty">No games yet. Use Add game to pick an .exe, or start a game and choose Add running game.</p>
+      <p class="setting-note" id="game-empty">No games yet. Use Find installed games, Add game, or start a game and choose Add running game.</p>
+      <div class="session-head">
+        <h3>Recent sessions</h3>
+        <button class="window-action" id="sessions-clear" type="button">Clear history</button>
+      </div>
+      <ul class="session-list" id="session-list"></ul>
+      <p class="setting-note" id="session-empty">Sessions appear here after you've played for a minute or so.</p>
     </section>
 
     <section class="tab-panel settings-panel" id="tab-overlay" role="tabpanel" data-tab-panel="overlay" hidden>
@@ -151,6 +159,26 @@
               <label class="check-option"><input type="checkbox" data-setting="fpsLow">1% low</label>
               <label class="check-option"><input type="checkbox" data-setting="graphRate">Framerate graph</label>
               <label class="check-option"><input type="checkbox" data-setting="graphTime">Frametime graph</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>System I/O and encoder</h3>
+            <p class="setting-note">Encoder is the video engine load, which on GeForce NOW is the stream being encoded. Net Out roughly tracks the stream bitrate. Per-second values in megabits or megabytes.</p>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="encoderLoad">Encoder load</label>
+              <label class="check-option"><input type="checkbox" data-setting="netOut">Net Out</label>
+              <label class="check-option"><input type="checkbox" data-setting="netIn">Net In</label>
+              <label class="check-option"><input type="checkbox" data-setting="diskRead">Disk Read</label>
+              <label class="check-option"><input type="checkbox" data-setting="diskWrite">Disk Write</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>Network</h3>
+            <p class="setting-note">Turn the readout on in Settings first.</p>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="netPing">Ping</label>
+              <label class="check-option"><input type="checkbox" data-setting="netJitter">Jitter</label>
+              <label class="check-option"><input type="checkbox" data-setting="netLoss">Packet loss</label>
             </div>
           </section>
           <section class="settings-group">
@@ -202,6 +230,11 @@
         <aside class="preview-wrap">
           <div class="preview-caption"><span>Live preview</span><span>Current system readings</span></div>
           <div class="preview-stage" id="preview-stage"></div>
+          <div class="button-row share-row">
+            <button class="window-action" id="share-text" type="button">Copy readings as text</button>
+            <button class="window-action" id="share-image" type="button">Copy preview as image</button>
+          </div>
+          <p class="setting-note" id="share-status" role="status" aria-live="polite"></p>
         </aside>
       </div>
     </section>
@@ -229,6 +262,19 @@
           <ul class="keybind-list" id="keybind-list"></ul>
           <div class="button-row"><button class="window-action" id="keybind-reset" type="button">Reset to defaults</button></div>
           <p class="setting-note" id="keybind-status" role="status" aria-live="polite"></p>
+        </section>
+        <section class="settings-group">
+          <h3>Startup and overlay</h3>
+          <label class="check-option"><input id="login-enabled" type="checkbox">Start SalsaStats with Windows</label>
+          <label class="check-option extra"><input id="start-overlay" type="checkbox">Open straight into the overlay</label>
+          <label class="check-option extra"><input id="auto-overlay" type="checkbox">Show the overlay only while a game is running</label>
+          <p class="setting-note">With the last option the overlay stays hidden until a game starts presenting frames, and hides again about 20 seconds after it stops. Ctrl+Alt+H still hides or shows it by hand. Start with Windows only works in the installed app.</p>
+        </section>
+        <section class="settings-group">
+          <h3>Network readout</h3>
+          <label class="check-option"><input id="net-enabled" type="checkbox">Measure connection ping, jitter and loss</label>
+          <label class="select-option">Test host<input id="net-host" class="text-input" type="text" maxlength="100" value="1.1.1.1" aria-label="Host to measure"></label>
+          <p class="setting-note">Off by default. When on, SalsaStats opens a tiny connection to this host every few seconds to time it. In GeForce NOW this measures the cloud PC's internet connection, not your stream; GeForce NOW's own panel shows the stream ping. Show the readings from the Overlay tab.</p>
         </section>
         <section class="settings-group">
           <h3>Frame rate</h3>
@@ -299,6 +345,7 @@
         <div class="osd-row" data-row="gpuUsage"><span class="osd-label">GPU Usage</span><span class="osd-value"><span data-field="gpuUsage">--</span><span class="osd-unit">%</span></span></div>
         <div class="osd-row" data-row="gpuVram"><span class="osd-label">GPU VRAM</span><span class="osd-value" data-field="gpuVram">--</span></div>
         <div class="osd-row" data-row="gpuClock"><span class="osd-label">GPU Clock</span><span class="osd-value" data-field="gpuClock">--</span></div>
+        <div class="osd-row" data-row="encoderLoad"><span class="osd-label">Encoder</span><span class="osd-value"><span data-field="encoderLoad">--</span><span class="osd-unit">%</span></span></div>
       </section>
       <section class="osd-group" data-group="cpu">
         <h2 class="osd-group-title"><span>CPU</span><span class="osd-device-name" data-field="cpuName" title="Detecting processor">Detecting processor</span></h2>
@@ -309,6 +356,19 @@
       <section class="osd-group" data-group="memory">
         <h2 class="osd-group-title">MEMORY</h2>
         <div class="osd-row" data-row="memoryUsage"><span class="osd-label">RAM Usage</span><span class="osd-value" data-field="memoryUsage">--</span></div>
+      </section>
+      <section class="osd-group" data-group="io">
+        <h2 class="osd-group-title">SYSTEM I/O</h2>
+        <div class="osd-row" data-row="netIn"><span class="osd-label">Net In</span><span class="osd-value"><span data-field="netIn">--</span><span class="osd-unit">Mb</span></span></div>
+        <div class="osd-row" data-row="netOut"><span class="osd-label">Net Out</span><span class="osd-value"><span data-field="netOut">--</span><span class="osd-unit">Mb</span></span></div>
+        <div class="osd-row" data-row="diskRead"><span class="osd-label">Disk Read</span><span class="osd-value"><span data-field="diskRead">--</span><span class="osd-unit">MB</span></span></div>
+        <div class="osd-row" data-row="diskWrite"><span class="osd-label">Disk Write</span><span class="osd-value"><span data-field="diskWrite">--</span><span class="osd-unit">MB</span></span></div>
+      </section>
+      <section class="osd-group" data-group="network">
+        <h2 class="osd-group-title">NETWORK</h2>
+        <div class="osd-row" data-row="netPing"><span class="osd-label">Ping</span><span class="osd-value"><span data-field="netPing">--</span><span class="osd-unit">ms</span></span></div>
+        <div class="osd-row" data-row="netJitter"><span class="osd-label">Jitter</span><span class="osd-value"><span data-field="netJitter">--</span><span class="osd-unit">ms</span></span></div>
+        <div class="osd-row" data-row="netLoss"><span class="osd-label">Loss</span><span class="osd-value"><span data-field="netLoss">--</span><span class="osd-unit">%</span></span></div>
       </section>
       <section class="osd-group" data-group="fps">
         <h2 class="osd-group-title">FRAMERATE</h2>
