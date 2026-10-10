@@ -25,6 +25,7 @@
 
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" id="tab-btn-overview" role="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" id="tab-btn-games" role="tab" type="button" data-tab="games" aria-selected="false">Games</button>
     <button class="tab" id="tab-btn-overlay" role="tab" type="button" data-tab="overlay" aria-selected="false">Overlay</button>
     <button class="tab" id="tab-btn-settings" role="tab" type="button" data-tab="settings" aria-selected="false">Settings</button>
   </nav>
@@ -97,13 +98,33 @@
     </section>
     </div>
 
+    <section class="tab-panel settings-panel" id="tab-games" role="tabpanel" data-tab-panel="games" hidden>
+      <div class="settings-heading">
+        <div><div class="eyebrow">Library</div><h2>Your games</h2></div>
+        <div class="button-row">
+          <button class="window-action" id="game-current" type="button">Add running game</button>
+          <button class="window-action primary" id="game-browse" type="button">Add game...</button>
+        </div>
+      </div>
+      <p class="setting-note">Add a game to give it a proper name and its own overlay layout. SalsaStats switches to that layout automatically while the game is running.</p>
+      <p class="setting-note game-status" id="game-status" role="status" aria-live="polite"></p>
+      <ul class="game-library" id="game-library"></ul>
+      <p class="setting-note" id="game-empty">No games yet. Use Add game to pick an .exe, or start a game and choose Add running game.</p>
+    </section>
+
     <section class="tab-panel settings-panel" id="tab-overlay" role="tabpanel" data-tab-panel="overlay" hidden>
       <div class="settings-heading">
         <div><div class="eyebrow">Overlay studio</div><h2>Choose what the overlay shows</h2></div>
         <button class="window-action primary" id="settings-overlay" type="button">Open overlay</button>
       </div>
+      <div class="profile-bar">
+        <label class="select-option">Layout for<select id="profile-select"></select></label>
+        <button class="window-action" id="profile-custom" type="button" hidden>Customise for this game</button>
+        <button class="window-action" id="profile-reset" type="button" hidden>Use default layout</button>
+      </div>
+      <p class="setting-note" id="profile-note"></p>
       <div class="settings-layout">
-        <div class="settings-controls">
+        <div class="settings-controls" id="overlay-controls">
           <section class="settings-group">
             <h3>GPU</h3>
             <div class="settings-options">
@@ -177,6 +198,16 @@
       </div>
       <div class="settings-controls single">
         <section class="settings-group">
+          <h3>Updates</h3>
+          <div class="update-row">
+            <div>
+              <div class="update-version" id="app-version">SalsaStats</div>
+              <div class="setting-note" id="update-status" role="status" aria-live="polite">Updates are checked on launch and every six hours.</div>
+            </div>
+            <button class="window-action primary" id="check-updates" type="button">Check for updates</button>
+          </div>
+        </section>
+        <section class="settings-group">
           <h3>Keybinds</h3>
           <p class="setting-note">The overlay ignores the mouse, so use these while playing.</p>
           <ul class="keybind-list">
@@ -192,16 +223,6 @@
           <label class="select-option">Display mode<select id="fps-mode"><option value="raw">Raw render FPS</option><option value="capped">Capped to stream rate</option></select></label>
           <label class="select-option" id="fps-cap-row">Stream cap<select id="fps-cap"><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option><option value="240">240 FPS</option></select></label>
           <p class="setting-note">Raw shows how fast the game renders before streaming. Capped limits the numbers to your stream rate, which approximates what GeForce NOW shows. The real stream rate cannot be read, so set the cap yourself.</p>
-        </section>
-        <section class="settings-group">
-          <h3>Game names</h3>
-          <p class="setting-note">Names come from the game window automatically. Add a custom name if one looks wrong.</p>
-          <div class="game-name-form">
-            <input id="game-exe" type="text" placeholder="Executable, e.g. b1-Win64-Shipping.exe" aria-label="Executable name">
-            <input id="game-name" type="text" placeholder="Display name" aria-label="Display name" maxlength="60">
-            <button class="window-action" id="game-add" type="button">Add</button>
-          </div>
-          <ul class="game-name-list" id="game-name-list"></ul>
         </section>
         <section class="settings-group">
           <h3>Window behavior</h3>
@@ -247,6 +268,7 @@
     <span class="status-item" id="status-capture">Frame capture: starting</span>
     <span class="status-item" id="status-gpu">GPU source: --</span>
     <span class="bar-spacer"></span>
+    <span class="status-item" id="status-version"></span>
     <span class="status-item">Stats stay on this PC</span>
     <span class="status-item">Updates every 2 seconds</span>
   </footer>

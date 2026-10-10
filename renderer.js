@@ -46,27 +46,70 @@
       overlayAboveGames: false,
       fpsMode: 'raw',
       fpsCap: 60,
-      gameNames: {},
+      games: [],
       minimal: false,
       minimalRows: { fpsCurrent: true, gpuUsage: true, gpuTemp: true, cpuUsage: true },
       hideUnavailable: true,
     };
 
-    let settings = defaultSettings;
+    let settings = JSON.parse(JSON.stringify(defaultSettings));
+    let legacyGameNames = null;
     try {
       const saved = JSON.parse(localStorage.getItem('salsastats-overlay-settings') || 'null');
       if (saved) {
+        legacyGameNames = saved.gameNames || null;
         settings = {
           ...defaultSettings,
           ...saved,
           visible: { ...defaultSettings.visible, ...saved.visible },
           colors: { ...defaultSettings.colors, ...saved.colors },
-          gameNames: { ...saved.gameNames },
+          games: Array.isArray(saved.games) ? saved.games : [],
           minimalRows: { ...defaultSettings.minimalRows, ...saved.minimalRows },
         };
       }
     } catch (error) {
       localStorage.removeItem('salsastats-overlay-settings');
+    }
+    delete settings.gameNames;
+
+    // A profile is the part of the overlay look a game can override.
+    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
+    function copyProfile(source) {
+      return JSON.parse(JSON.stringify(Object.fromEntries(PROFILE_KEYS.map(key => [key, source[key]]))));
+    }
+    function normalizeProfile(profile) {
+      return {
+        ...copyProfile(defaultSettings),
+        ...profile,
+        visible: { ...defaultSettings.visible, ...profile.visible },
+        colors: { ...defaultSettings.colors, ...profile.colors },
+        minimalRows: { ...defaultSettings.minimalRows, ...profile.minimalRows },
+      };
+    }
+    function newGameId() {
+      return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    }
+    if (legacyGameNames && !settings.games.length) {
+      Object.entries(legacyGameNames).forEach(([exe, name]) => {
+        settings.games.push({ id: newGameId(), exe: String(exe).toLowerCase(), name: String(name).slice(0, 60), profile: null });
+      });
+    }
+    settings.games.forEach(game => {
+      if (game.profile) game.profile = normalizeProfile(game.profile);
+    });
+
+    let editingId = null;
+    let activeGameId = null;
+    const findGame = id => settings.games.find(game => game.id === id) || null;
+    const matchGame = exe => settings.games.find(game => game.exe === String(exe).toLowerCase()) || null;
+    function editTarget() {
+      const game = findGame(editingId);
+      return game && game.profile ? game.profile : settings;
+    }
+    function appliedProfile() {
+      const id = document.body.classList.contains('overlay') ? activeGameId : editingId;
+      const game = findGame(id);
+      return game && game.profile ? game.profile : settings;
     }
 
     const preview = osdPanel.cloneNode(true);
@@ -79,33 +122,36 @@
     }
 
     function applySettings() {
+      // P drives what the overlay looks like now; E is the profile shown in the editing controls.
+      const P = appliedProfile();
+      const E = editTarget();
       const root = document.documentElement;
-      root.style.setProperty('--osd-scale', settings.scale / 100);
-      const effectiveOpacity = settings.backgroundMode === 'none' ? 0 : settings.opacity / 100;
+      root.style.setProperty('--osd-scale', P.scale / 100);
+      const effectiveOpacity = P.backgroundMode === 'none' ? 0 : P.opacity / 100;
       root.style.setProperty('--osd-opacity', effectiveOpacity);
       document.querySelectorAll('.osd-shell').forEach(shell => {
-        shell.classList.toggle('background-none', settings.backgroundMode === 'none');
-        shell.classList.toggle('background-soft', settings.backgroundMode === 'soft');
-        shell.classList.toggle('background-full', settings.backgroundMode === 'full');
+        shell.classList.toggle('background-none', P.backgroundMode === 'none');
+        shell.classList.toggle('background-soft', P.backgroundMode === 'soft');
+        shell.classList.toggle('background-full', P.backgroundMode === 'full');
       });
-      Object.entries(settings.colors).forEach(([name, color]) => {
+      Object.entries(P.colors).forEach(([name, color]) => {
         root.style.setProperty(`--${name}-color`, color);
       });
 
       document.querySelectorAll('[data-row]').forEach(row => {
         const setting = row.dataset.row;
-        let hidden = Object.prototype.hasOwnProperty.call(settings.visible, setting)
-          ? !settings.visible[setting]
+        let hidden = Object.prototype.hasOwnProperty.call(P.visible, setting)
+          ? !P.visible[setting]
           : false;
-        if (settings.minimal && !settings.minimalRows[setting]) hidden = true;
+        if (P.minimal && !P.minimalRows[setting]) hidden = true;
         row.hidden = hidden;
       });
-      document.body.classList.toggle('osd-minimal', settings.minimal);
+      document.body.classList.toggle('osd-minimal', P.minimal);
       document.body.classList.toggle('anchor-right', settings.anchor.endsWith('right'));
       document.body.classList.toggle('anchor-bottom', settings.anchor.startsWith('bottom'));
       document.body.classList.toggle('hide-unavailable', settings.hideUnavailable);
       document.querySelectorAll('[data-minimal]').forEach(input => {
-        input.checked = settings.minimalRows[input.dataset.minimal] === true;
+        input.checked = E.minimalRows[input.dataset.minimal] === true;
       });
       document.getElementById('hide-unavailable').checked = settings.hideUnavailable;
       document.querySelectorAll('.osd-group').forEach(group => {
@@ -113,7 +159,7 @@
         if (group.dataset.group === 'fps') {
           const fpsRows = rows.filter(row => row.dataset.row !== 'fpsNote');
           const hasVisibleMetric = fpsRows.some(row => !row.hidden);
-          group.querySelector('[data-row="fpsNote"]').hidden = !hasVisibleMetric || settings.minimal;
+          group.querySelector('[data-row="fpsNote"]').hidden = !hasVisibleMetric || P.minimal;
           group.hidden = !hasVisibleMetric;
         } else {
           group.hidden = rows.length > 0 && rows.every(row => row.hidden);
@@ -121,18 +167,18 @@
       });
 
       document.querySelectorAll('[data-setting]').forEach(input => {
-        input.checked = settings.visible[input.dataset.setting] !== false;
+        input.checked = E.visible[input.dataset.setting] !== false;
       });
       document.querySelectorAll('[data-color]').forEach(input => {
-        input.value = settings.colors[input.dataset.color];
+        input.value = E.colors[input.dataset.color];
       });
-      document.getElementById('scale-setting').value = settings.scale;
-      document.getElementById('scale-output').textContent = `${settings.scale}%`;
-      document.getElementById('size-setting').value = settings.size;
-      document.getElementById('size-output').textContent = `${settings.size}%`;
-      document.getElementById('opacity-setting').value = settings.opacity;
-      document.getElementById('opacity-output').textContent = `${settings.opacity}%`;
-      document.getElementById('background-setting').value = settings.backgroundMode;
+      document.getElementById('scale-setting').value = E.scale;
+      document.getElementById('scale-output').textContent = `${E.scale}%`;
+      document.getElementById('size-setting').value = E.size;
+      document.getElementById('size-output').textContent = `${E.size}%`;
+      document.getElementById('opacity-setting').value = E.opacity;
+      document.getElementById('opacity-output').textContent = `${E.opacity}%`;
+      document.getElementById('background-setting').value = E.backgroundMode;
       document.getElementById('anchor-setting').value = settings.anchor;
       document.getElementById('overlay-above-games').checked = settings.overlayAboveGames === true;
       document.getElementById('fps-mode').value = settings.fpsMode;
@@ -143,36 +189,36 @@
 
     document.querySelectorAll('[data-setting]').forEach(input => {
       input.addEventListener('change', () => {
-        settings.visible[input.dataset.setting] = input.checked;
+        editTarget().visible[input.dataset.setting] = input.checked;
         saveSettings();
         applySettings();
       });
     });
     document.querySelectorAll('[data-color]').forEach(input => {
       input.addEventListener('input', () => {
-        settings.colors[input.dataset.color] = input.value;
+        editTarget().colors[input.dataset.color] = input.value;
         saveSettings();
         applySettings();
       });
     });
     document.getElementById('scale-setting').addEventListener('input', event => {
-      settings.scale = Number(event.target.value);
+      editTarget().scale = Number(event.target.value);
       saveSettings();
       applySettings();
     });
     document.getElementById('size-setting').addEventListener('input', event => {
-      settings.size = Number(event.target.value);
+      editTarget().size = Number(event.target.value);
       saveSettings();
       applySettings();
-      statsApi.setScale(settings.size);
+      statsApi.setScale(appliedProfile().size);
     });
     document.getElementById('opacity-setting').addEventListener('input', event => {
-      settings.opacity = Number(event.target.value);
+      editTarget().opacity = Number(event.target.value);
       saveSettings();
       applySettings();
     });
     document.getElementById('background-setting').addEventListener('change', event => {
-      settings.backgroundMode = event.target.value;
+      editTarget().backgroundMode = event.target.value;
       saveSettings();
       applySettings();
     });
@@ -199,41 +245,164 @@
       renderFrames(lastFrames);
     });
 
-    const gameNameList = document.getElementById('game-name-list');
-    function renderGameNames() {
-      gameNameList.textContent = '';
-      Object.entries(settings.gameNames).forEach(([exe, name]) => {
-        const item = document.createElement('li');
-        const label = document.createElement('span');
-        label.textContent = `${exe} \u2192 ${name}`;
+    const gameLibrary = document.getElementById('game-library');
+    const gameStatus = document.getElementById('game-status');
+
+    function prettyGameName(exe) {
+      const name = String(exe)
+        .replace(/\.exe$/i, '')
+        .replace(/[-_ ]?win(32|64)([-_ ]?shipping)?$/i, '')
+        .replace(/[-_.]+/g, ' ')
+        .trim();
+      return name || String(exe);
+    }
+
+    function renderProfileBar() {
+      const select = document.getElementById('profile-select');
+      select.textContent = '';
+      [{ id: '', label: 'Default (all games)' }, ...settings.games.map(game => ({ id: game.id, label: game.name }))].forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = item.label;
+        select.append(option);
+      });
+      if (!findGame(editingId)) editingId = null;
+      select.value = editingId || '';
+      const game = findGame(editingId);
+      const locked = Boolean(game) && !game.profile;
+      document.getElementById('profile-custom').hidden = !locked;
+      document.getElementById('profile-reset').hidden = !(game && game.profile);
+      const controls = document.getElementById('overlay-controls');
+      controls.inert = locked;
+      controls.classList.toggle('locked', locked);
+      let note = 'These settings apply to every game that has no layout of its own.';
+      if (locked) note = `${game.name} uses the default layout. Customise it to give this game its own.`;
+      else if (game) note = `Changes here only affect ${game.name}.`;
+      document.getElementById('profile-note').textContent = note;
+    }
+
+    function renderLibrary() {
+      gameLibrary.textContent = '';
+      document.getElementById('game-empty').hidden = settings.games.length > 0;
+      settings.games.forEach(game => {
+        const row = document.createElement('li');
+        row.className = 'game-row';
+
+        const main = document.createElement('div');
+        main.className = 'game-main';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = game.name;
+        nameInput.maxLength = 60;
+        nameInput.setAttribute('aria-label', `Display name for ${game.exe}`);
+        nameInput.addEventListener('change', () => {
+          game.name = nameInput.value.trim().slice(0, 60) || prettyGameName(game.exe);
+          nameInput.value = game.name;
+          saveSettings();
+          renderProfileBar();
+          renderFrames(lastFrames);
+        });
+        const meta = document.createElement('div');
+        meta.className = 'game-meta';
+        const exe = document.createElement('span');
+        exe.textContent = game.exe;
+        const badge = document.createElement('span');
+        badge.className = `game-badge${game.profile ? ' custom' : ''}`;
+        badge.textContent = game.profile ? 'Custom layout' : 'Default layout';
+        meta.append(exe, badge);
+        main.append(nameInput, meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'button-row';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'window-action';
+        edit.textContent = 'Edit layout';
+        edit.addEventListener('click', () => {
+          editingId = game.id;
+          renderProfileBar();
+          applySettings();
+          selectTab('overlay');
+        });
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'window-action';
         remove.textContent = 'Remove';
         remove.addEventListener('click', () => {
-          delete settings.gameNames[exe];
+          settings.games = settings.games.filter(item => item.id !== game.id);
+          if (activeGameId === game.id) activeGameId = null;
           saveSettings();
-          renderGameNames();
+          renderLibrary();
+          renderProfileBar();
+          applySettings();
           renderFrames(lastFrames);
         });
-        item.append(label, remove);
-        gameNameList.append(item);
+        actions.append(edit, remove);
+
+        row.append(main, actions);
+        gameLibrary.append(row);
       });
     }
-    document.getElementById('game-add').addEventListener('click', () => {
-      const exeInput = document.getElementById('game-exe');
-      const nameInput = document.getElementById('game-name');
-      const exe = exeInput.value.trim().toLowerCase();
-      const name = nameInput.value.trim().slice(0, 60);
-      if (!exe || !name) return;
-      settings.gameNames[exe] = name;
-      exeInput.value = '';
-      nameInput.value = '';
+
+    function addGame(exe, name) {
+      const key = String(exe || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = settings.games.find(game => game.exe === key);
+      if (existing) {
+        gameStatus.textContent = `${existing.name} is already in your library.`;
+        return;
+      }
+      const game = { id: newGameId(), exe: key, name: (name || prettyGameName(exe)).slice(0, 60), profile: null };
+      settings.games.push(game);
       saveSettings();
-      renderGameNames();
+      renderLibrary();
+      renderProfileBar();
       renderFrames(lastFrames);
+      gameStatus.textContent = `Added ${game.name}. Rename it or customise its layout below.`;
+    }
+
+    document.getElementById('game-browse').addEventListener('click', async () => {
+      gameStatus.textContent = '';
+      try {
+        const picked = await statsApi.browseGame();
+        if (picked) addGame(picked.exe);
+      } catch {
+        gameStatus.textContent = 'Could not open the file picker.';
+      }
     });
-    renderGameNames();
+    document.getElementById('game-current').addEventListener('click', () => {
+      const running = lastFrames?.fps;
+      if (!running) {
+        gameStatus.textContent = 'No running game detected. Start a game first, or use Add game.';
+        return;
+      }
+      addGame(running.application, running.displayName);
+    });
+    document.getElementById('profile-select').addEventListener('change', event => {
+      editingId = event.target.value || null;
+      renderProfileBar();
+      applySettings();
+    });
+    document.getElementById('profile-custom').addEventListener('click', () => {
+      const game = findGame(editingId);
+      if (!game) return;
+      game.profile = copyProfile(settings);
+      saveSettings();
+      renderLibrary();
+      renderProfileBar();
+      applySettings();
+    });
+    document.getElementById('profile-reset').addEventListener('click', () => {
+      const game = findGame(editingId);
+      if (!game) return;
+      game.profile = null;
+      saveSettings();
+      renderLibrary();
+      renderProfileBar();
+      applySettings();
+    });
+    renderLibrary();
+    renderProfileBar();
 
     function formatBytes(bytes) {
       if (!Number.isFinite(bytes) || bytes <= 0) return '--';
@@ -315,9 +484,16 @@
       lastFrames = frames;
       const raw = frames?.fps;
       const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
+      const matched = raw ? matchGame(raw.application) : null;
+      const matchedId = matched ? matched.id : null;
+      if (matchedId !== activeGameId) {
+        activeGameId = matchedId;
+        applySettings();
+        if (document.body.classList.contains('overlay')) statsApi.setScale(appliedProfile().size);
+      }
       const fps = raw && {
         ...raw,
-        name: settings.gameNames[raw.application.toLowerCase()] || raw.displayName || raw.application,
+        name: (matched && matched.name) || raw.displayName || raw.application,
         current: Math.min(raw.current, cap),
         average: Math.min(raw.average, cap),
         low: Math.min(raw.low, cap),
@@ -488,13 +664,14 @@
       event.preventDefault();
       osdGrip.setPointerCapture(event.pointerId);
       const startX = event.screenX;
-      const startSize = settings.size;
+      const profile = appliedProfile();
+      const startSize = profile.size;
       const move = moveEvent => {
         const size = Math.max(70, Math.min(150, Math.round(startSize + (moveEvent.screenX - startX) / 3.4)));
-        settings.size = size;
-        settings.scale = Math.max(80, Math.min(140, size));
+        profile.size = size;
+        profile.scale = Math.max(80, Math.min(140, size));
         applySettings();
-        statsApi.setScale(settings.size);
+        statsApi.setScale(profile.size);
       };
       const finish = () => {
         osdGrip.removeEventListener('pointermove', move);
@@ -513,9 +690,10 @@
       modeToggle.title = mode === 'compact' ? 'Switch to full view' : 'Switch to compact view';
       overlayToggle.setAttribute('aria-pressed', String(mode === 'overlay'));
       statsApi.setMode(mode);
+      applySettings();
       if (mode === 'overlay') {
         statsApi.setAnchor(settings.anchor);
-        statsApi.setScale(settings.size);
+        statsApi.setScale(appliedProfile().size);
       }
       requestAnimationFrame(() => {
         drawChart();
@@ -665,8 +843,22 @@
 
     if (localStorage.getItem('salsastats-log-open') === '1') setLogOpen(true);
 
+    function updateStatusText(state) {
+      switch (state?.status) {
+        case 'checking': return 'Checking for updates...';
+        case 'current': return 'You are on the latest version.';
+        case 'available': return `Version ${state.version} found. Downloading...`;
+        case 'downloading': return `Downloading update: ${state.percent || 0}%.`;
+        case 'downloaded': return `Version ${state.version} is ready. Restart to install.`;
+        case 'error': return 'Could not check for updates. Open the log panel for details.';
+        case 'dev': return 'Update checks only run in the installed app.';
+        default: return 'Updates are checked on launch and every six hours.';
+      }
+    }
+
     function renderUpdateState(state) {
-      if (!state || ['idle', 'checking', 'current'].includes(state.status)) {
+      document.getElementById('update-status').textContent = updateStatusText(state);
+      if (!state || ['idle', 'checking', 'current', 'dev'].includes(state.status)) {
         updateBanner.hidden = true;
         return;
       }
@@ -682,6 +874,25 @@
     const unsubscribeUpdates = statsApi.onUpdateState?.(renderUpdateState);
     statsApi.getUpdateState?.().then(renderUpdateState).catch(() => {});
     updateInstall.addEventListener('click', () => statsApi.installUpdate?.());
+    statsApi.getVersion?.().then(version => {
+      if (!version) return;
+      document.getElementById('app-version').textContent = `SalsaStats v${version}`;
+      document.getElementById('status-version').textContent = `v${version}`;
+    }).catch(() => {});
+    document.getElementById('check-updates').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Checking...';
+      document.getElementById('update-status').textContent = updateStatusText({ status: 'checking' });
+      try {
+        renderUpdateState(await statsApi.checkForUpdates());
+      } catch {
+        renderUpdateState({ status: 'error' });
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Check for updates';
+      }
+    });
     document.getElementById('update-later').addEventListener('click', () => { updateBanner.hidden = true; });
 
     async function refreshLogDirectory() {
@@ -737,7 +948,7 @@
     document.getElementById('settings-overlay').addEventListener('click', () => setMode('overlay'));
     document.querySelectorAll('[data-minimal]').forEach(input => {
       input.addEventListener('change', () => {
-        settings.minimalRows[input.dataset.minimal] = input.checked;
+        editTarget().minimalRows[input.dataset.minimal] = input.checked;
         saveSettings();
         applySettings();
       });
@@ -752,7 +963,8 @@
       if (action === 'edit-off') document.body.classList.remove('osd-editing');
       if (action === 'customize') openSettings();
       if (action === 'minimal') {
-        settings.minimal = !settings.minimal;
+        const profile = appliedProfile();
+        profile.minimal = !profile.minimal;
         saveSettings();
         applySettings();
       }

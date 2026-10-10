@@ -373,3 +373,27 @@
     .select-option select { max-width: 100%; min-width: 0; }
     .settings-group { min-width: 0; overflow: hidden; }
     @media (min-width: 1000px) { .appearance-options { grid-template-columns: 1fr 1fr; } }
+
+    .update-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .update-version { font-size: 14px; font-weight: 600; color: var(--text); }
+    .update-row .setting-note { margin-top: 4px; }
+    .update-row .window-action { flex: none; }
+
+    /* Games library and profiles */
+    .game-library { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+    .game-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+    .game-main { flex: 1 1 260px; min-width: 0; }
+    .game-main input { width: 100%; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; font: inherit; font-size: 14px; font-weight: 600; }
+    .game-main input:hover { border-color: var(--line); }
+    .game-main input:focus-visible { border-color: var(--lime); outline: none; background: var(--surface); }
+    .game-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding-left: 8px; color: var(--muted); font-size: 11px; }
+    .game-badge { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; }
+    .game-badge.custom { border-color: rgba(110,168,254,.5); color: var(--lime); }
+    .game-row .button-row { margin-top: 0; }
+    .game-row .window-action { border-color: var(--line); background: var(--surface); }
+    .game-status { min-height: 18px; color: var(--amber); }
+    .profile-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .profile-bar .select-option { gap: 10px; }
+    .profile-bar .window-action { border-color: var(--line); background: var(--surface-raised); }
+    #overlay-controls.locked { opacity: .45; }
+    @media (max-width: 760px) { .tab { padding: 0 10px 12px; } }

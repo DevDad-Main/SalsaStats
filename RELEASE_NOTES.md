@@ -1,13 +1,13 @@
-# SalsaStats 1.0.23
+# SalsaStats 1.0.24
 
 ## What's new
 
-- New keybind: Ctrl+Alt+E unlocks the overlay so you can drag it anywhere and resize it from the corner, and press it again to lock it in place. The position is remembered between launches.
-- Removed the CPU Power and GPU Power readings, which are not available on GeForce NOW.
-- Fixed the Overlay settings cards overlapping when the window is narrow.
+- New Games tab: build a library of games by picking their .exe or adding the one that is running, give each a proper name, and give it its own overlay layout. The layout switches on automatically while that game is running. Existing custom game names are carried over.
+- The Overlay tab has a "Layout for" menu to edit the default layout or a single game's layout.
+- New Check for updates button in Settings, with the current version and update status. The version also shows in the status bar, and update checks are now written to the log.
 
 ## Install and update
 
-Download `SalsaStats-1.0.23-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
+Download `SalsaStats-1.0.24-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
 
 The installer is unsigned. SmartScreen or managed-device application-control policies may still warn or block it.

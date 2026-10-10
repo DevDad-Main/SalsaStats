@@ -26,11 +26,12 @@ Open the app and press **Overlay** to turn it into an always-on-top panel. The o
 | `Ctrl` `Alt` `E` | Unlock the overlay to drag it around and resize it from the corner, then press again to lock it in place |
 | `Ctrl` `` ` `` | Show or hide the log panel (in the dashboard) |
 
-The dashboard has three tabs:
+The dashboard has four tabs:
 
 - **Overview** shows live CPU, GPU and memory, a usage history and your frame rate.
-- **Overlay** lets you choose which readings appear, set colours, size and screen corner, and pick what the minimal view shows.
-- **Settings** has the FPS mode, custom game names, window behaviour and the log folder.
+- **Games** is your library. Add a game by picking its `.exe`, or press **Add running game** while it's open. Each game gets a proper name and can have its own overlay layout, which switches on automatically while that game runs.
+- **Overlay** lets you choose which readings appear, set colours, size and screen corner, and pick what the minimal view shows. Use the **Layout for** menu to edit the default layout or a single game's.
+- **Settings** has the update check, FPS mode, window behaviour and the log folder.
 
 ## What it shows
 
@@ -52,7 +53,7 @@ You can switch in **Settings → Frame rate**:
 
 Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Without that, everything else still works. The status bar tells you when capture is unavailable.
 
-The game name comes from its window title. If it looks wrong, set your own under **Settings → Game names**.
+The game name comes from its window title. For a name you prefer, add the game to your library on the **Games** tab and rename it there.
 
 ## If something looks off
 

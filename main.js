@@ -251,6 +251,37 @@ function registerUpdateHandlers() {
     if (!isTrustedRenderer(event) || currentUpdateState.status !== 'downloaded') return;
     autoUpdater.quitAndInstall(true, true);
   });
+
+  ipcMain.handle('app:get-version', event => (isTrustedRenderer(event) ? app.getVersion() : null));
+
+  ipcMain.handle('games:browse', async event => {
+    if (!isTrustedRenderer(event)) return null;
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Choose a game executable',
+        properties: ['openFile'],
+        filters: [{ name: 'Programs', extensions: ['exe'] }],
+      });
+      if (result.canceled || !result.filePaths[0]) return null;
+      return { exe: path.basename(result.filePaths[0]) };
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to browse for a game.', error);
+      return null;
+    }
+  });
+
+  ipcMain.handle('updates:check', async event => {
+    if (!isTrustedRenderer(event)) return null;
+    if (!app.isPackaged) return { status: 'dev' };
+    if (['checking', 'downloading', 'downloaded'].includes(currentUpdateState.status)) return currentUpdateState;
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to check for updates.', error);
+      publishUpdateState('error');
+    }
+    return currentUpdateState;
+  });
 }
 
 function configureAutoUpdates() {
@@ -259,13 +290,25 @@ function configureAutoUpdates() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowDowngrade = false;
-  autoUpdater.on('checking-for-update', () => publishUpdateState('checking'));
-  autoUpdater.on('update-available', info => publishUpdateState('available', { version: info.version }));
-  autoUpdater.on('update-not-available', () => publishUpdateState('current'));
+  autoUpdater.on('checking-for-update', () => {
+    logger.writeSync('info', 'Checking for updates.', { currentVersion: app.getVersion() });
+    publishUpdateState('checking');
+  });
+  autoUpdater.on('update-available', info => {
+    logger.writeSync('info', 'Update available.', { version: info.version });
+    publishUpdateState('available', { version: info.version });
+  });
+  autoUpdater.on('update-not-available', () => {
+    logger.writeSync('info', 'No update available.', { currentVersion: app.getVersion() });
+    publishUpdateState('current');
+  });
   autoUpdater.on('download-progress', progress => publishUpdateState('downloading', {
     percent: Math.round(progress.percent),
   }));
-  autoUpdater.on('update-downloaded', info => publishUpdateState('downloaded', { version: info.version }));
+  autoUpdater.on('update-downloaded', info => {
+    logger.writeSync('info', 'Update downloaded.', { version: info.version });
+    publishUpdateState('downloaded', { version: info.version });
+  });
   autoUpdater.on('error', error => {
     logger.writeSync('warn', 'Automatic update failed.', error);
     publishUpdateState('error');
