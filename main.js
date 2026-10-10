@@ -1,4 +1,6 @@
 const path = require('node:path');
+const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
@@ -35,6 +37,59 @@ let appExitCode = 0;
 let isWindowClosing = false;
 let initialHardwareSampleLogged = false;
 let currentUpdateState = { status: 'idle' };
+
+function nvapiSettingPath() {
+  return path.join(app.getPath('userData'), 'settings', 'nvapi.json');
+}
+
+function readNvapiSetting() {
+  try {
+    return JSON.parse(fs.readFileSync(nvapiSettingPath(), 'utf8')).enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+function registerNvapiHandlers() {
+  ipcMain.handle('nvapi:get', event => {
+    if (!isTrustedRenderer(event)) return null;
+    return { enabled: readNvapiSetting(), status: nvidiaPerf.getStatus() };
+  });
+
+  ipcMain.handle('nvapi:set', (event, enabled) => {
+    if (!isTrustedRenderer(event)) return { ok: false };
+    try {
+      fs.mkdirSync(path.dirname(nvapiSettingPath()), { recursive: true });
+      fs.writeFileSync(nvapiSettingPath(), JSON.stringify({ enabled: enabled === true }));
+      logger.writeSync('info', 'NVAPI setting changed.', { enabled: enabled === true });
+      return { ok: true, enabled: enabled === true };
+    } catch (error) {
+      logger.writeSync('error', 'Unable to save the NVAPI setting.', error);
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.on('app:restart', event => {
+    if (!isTrustedRenderer(event)) return;
+    // Start the new copy after this one has fully exited so Chromium's profile lock is free.
+    const args = process.argv.slice(1).map(arg => `"${arg}"`).join(' ');
+    const command = `ping -n 4 127.0.0.1 >nul & start "" "${process.execPath}" ${args}`;
+    try {
+      spawn('cmd.exe', ['/d', '/s', '/c', `"${command}"`], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+        windowsVerbatimArguments: true,
+        cwd: process.cwd(),
+      }).unref();
+      logger.writeSync('info', 'Restarting the app.');
+    } catch (error) {
+      logger.writeSync('error', 'Unable to restart the app.', error);
+      return;
+    }
+    requestShutdown(0);
+  });
+}
 
 function initializeLogging() {
   const userData = app.getPath('userData');
@@ -441,7 +496,9 @@ app.on('child-process-gone', (_event, details) => {
 
 app.whenReady().then(() => {
   initializeLogging();
+  nvidiaPerf.setEnabled(readNvapiSetting());
   registerLogHandlers();
+  registerNvapiHandlers();
   registerUpdateHandlers();
   configureAutoUpdates();
   createWindow();

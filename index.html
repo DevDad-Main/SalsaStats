@@ -147,6 +147,13 @@
             <label class="check-option"><input id="overlay-above-games" type="checkbox">Force above fullscreen games</label>
             <p class="setting-note">May steal focus or disrupt some games. Leave off if a game minimizes or closes.</p>
           </section>
+          <section class="settings-group">
+            <h3>Advanced GPU readings</h3>
+            <label class="check-option"><input id="nvapi-enabled" type="checkbox">Use NVIDIA NVAPI (experimental)</label>
+            <p class="setting-note">Reads GPU temperature, clock and power directly. If the app becomes unstable, turn this off and restart.</p>
+            <p class="nvapi-status" id="nvapi-status" role="status" aria-live="polite"></p>
+            <button class="window-action" id="nvapi-restart" type="button" hidden>Restart to apply</button>
+          </section>
         </div>
         <aside class="preview-wrap">
           <div class="preview-caption"><span>Live preview</span><span>Current system readings</span></div>

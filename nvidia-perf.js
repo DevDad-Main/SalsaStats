@@ -3,6 +3,11 @@ const fs = require('node:fs');
 
 let nvidiaPerf = null;
 let loadError = null;
+let enabled = process.env.SALSASTATS_NVAPI === '1';
+
+function setEnabled(value) {
+  enabled = value === true || process.env.SALSASTATS_NVAPI === '1';
+}
 
 function getAddonPath() {
   const relative = path.join('nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node');
@@ -23,8 +28,8 @@ function tryLoadAddon() {
   if (nvidiaPerf !== null || loadError !== null) return;
 
   // The addon calls NVAPI function IDs that are unverified and can crash the process.
-  if (process.env.SALSASTATS_NVAPI !== '1') {
-    loadError = new Error('NVAPI addon disabled (set SALSASTATS_NVAPI=1 to enable)');
+  if (!enabled) {
+    loadError = new Error('NVAPI addon disabled (enable it in Setup, or set SALSASTATS_NVAPI=1)');
     return;
   }
 
@@ -68,6 +73,7 @@ function getFrameRate() {
 }
 
 module.exports = {
+  setEnabled,
   getStatus,
   isAvailable,
   getGpuMetrics,

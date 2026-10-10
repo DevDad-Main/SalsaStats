@@ -39,7 +39,7 @@
         cpuTemp: true, cpuUsage: true, cpuClock: true, cpuPower: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
       },
-      colors: { gpu: '#50f45d', cpu: '#4ea8ff', memory: '#ffb65d', fps: '#ef49df' },
+      colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
       size: 100,
       opacity: 88,
@@ -422,6 +422,43 @@
       }
     });
 
+    const nvapiToggle = document.getElementById('nvapi-enabled');
+    const nvapiStatus = document.getElementById('nvapi-status');
+    const nvapiRestart = document.getElementById('nvapi-restart');
+    let nvapiLoadedEnabled = false;
+
+    function renderNvapi(state) {
+      const pending = nvapiToggle.checked !== nvapiLoadedEnabled;
+      nvapiRestart.hidden = !pending;
+      if (pending) nvapiStatus.textContent = 'Restart SalsaStats to apply this change.';
+      else if (state?.status?.loaded) nvapiStatus.textContent = 'NVAPI is active.';
+      else nvapiStatus.textContent = state?.status?.error || '';
+    }
+
+    async function refreshNvapi() {
+      if (!statsApi?.getNvapi) return;
+      try {
+        const state = await statsApi.getNvapi();
+        if (!state) return;
+        nvapiToggle.checked = state.enabled;
+        nvapiLoadedEnabled = state.enabled;
+        renderNvapi(state);
+      } catch (error) {
+        nvapiStatus.textContent = `Unable to read NVAPI setting: ${error.message}`;
+      }
+    }
+
+    nvapiToggle.addEventListener('change', async () => {
+      const result = await statsApi.setNvapi(nvapiToggle.checked).catch(error => ({ ok: false, error: error.message }));
+      if (!result?.ok) {
+        nvapiToggle.checked = !nvapiToggle.checked;
+        nvapiStatus.textContent = `Unable to save setting: ${result?.error || 'Unknown error'}`;
+        return;
+      }
+      renderNvapi();
+    });
+    nvapiRestart.addEventListener('click', () => statsApi.restartApp());
+
     document.getElementById('open-logs-folder').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -460,6 +497,7 @@
     document.getElementById('window-toggle-fullscreen').addEventListener('click', () => statsApi.toggleFullscreen());
     document.getElementById('window-close').addEventListener('click', () => statsApi.closeWindow());
     refreshLogDirectory();
+    refreshNvapi();
     new ResizeObserver(() => refreshCharts()).observe(chart);
     document.addEventListener('visibilitychange', refreshCharts);
     window.addEventListener('beforeunload', unsubscribeStats, { once: true });
