@@ -1,6 +1,6 @@
 {
   "name": "salsastats",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {
@@ -40,6 +40,9 @@
       "output": "release",
       "buildResources": "build"
     },
+    "asarUnpack": [
+      "nvidia-perf-addon/build/Release/nvidia_perf.node"
+    ],
     "files": [
       "main.js",
       "logger.js",

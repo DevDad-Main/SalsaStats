@@ -1,27 +1,32 @@
 const path = require('node:path');
-const { app } = require('electron');
+const fs = require('node:fs');
 
 let nvidiaPerf = null;
 let loadError = null;
 
 function getAddonPath() {
+  const relative = path.join('nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node');
   const candidates = [
-    // Packaged app (ASAR extracted or unpacked)
-    path.join(process.resourcesPath, 'nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node'),
-    // Development
-    path.join(__dirname, 'nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node'),
-    // Alternative dev location
-    path.join(__dirname, '..', 'nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node'),
+    // Packaged app: native modules must live outside the asar archive
+    path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), relative),
+    path.join(process.resourcesPath || '', 'app.asar.unpacked', relative),
+    path.join(__dirname, relative),
   ];
 
   for (const p of candidates) {
-    if (require('node:fs').existsSync(p)) return p;
+    if (fs.existsSync(p)) return p;
   }
   return null;
 }
 
 function tryLoadAddon() {
   if (nvidiaPerf !== null || loadError !== null) return;
+
+  // The addon calls NVAPI function IDs that are unverified and can crash the process.
+  if (process.env.SALSASTATS_NVAPI !== '1') {
+    loadError = new Error('NVAPI addon disabled (set SALSASTATS_NVAPI=1 to enable)');
+    return;
+  }
 
   const addonPath = getAddonPath();
   if (!addonPath) {
@@ -38,6 +43,11 @@ function tryLoadAddon() {
     console.warn('NVIDIA NVAPI addon failed to load:', error.message);
     nvidiaPerf = null;
   }
+}
+
+function getStatus() {
+  tryLoadAddon();
+  return { loaded: nvidiaPerf !== null, error: loadError ? loadError.message : null };
 }
 
 function isAvailable() {
@@ -58,6 +68,7 @@ function getFrameRate() {
 }
 
 module.exports = {
+  getStatus,
   isAvailable,
   getGpuMetrics,
   getFrameRate

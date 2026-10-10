@@ -3,6 +3,7 @@ const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron
 const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
+const nvidiaPerf = require('./nvidia-perf');
 
 const SAMPLE_INTERVAL_MS = 2000;
 const OVERLAY_BASE_WIDTH = 340;
@@ -371,7 +372,8 @@ registerWindowHandler('window:scale', scaleValue => {
 
 registerWindowHandler('window:move', point => {
   if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return;
-  mainWindow.setPosition(Number(point.x), Number(point.y), true);
+  // Electron 44 rejects fractional coordinates from DPI-scaled pointer events.
+  mainWindow.setPosition(Math.round(Number(point.x)), Math.round(Number(point.y)), true);
 });
 
 registerWindowHandler('window:minimize', () => mainWindow.minimize());
@@ -394,6 +396,7 @@ async function sampleStats() {
         gpuName: stats.gpu.name,
         gpuTelemetryAvailable: stats.gpu.usage !== null,
         gpuTelemetrySource: stats.gpu.telemetrySource,
+        nvapi: nvidiaPerf.getStatus(),
         gpuUsage: stats.gpu.usage,
         gpuMemoryUsedMiB: stats.gpu.memoryUsed,
         gpuMemoryTotalMiB: stats.gpu.memoryTotal,
