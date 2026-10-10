@@ -4,6 +4,7 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const os = require('node:os');
 const systeminformation = require('systeminformation');
+const nvidiaPerf = require('./nvidia-perf');
 
 const execFileAsync = promisify(execFile);
 
@@ -263,6 +264,8 @@ function createStatsReader() {
   let hasPrimaryGpuTelemetry = false;
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
+  let nvapiAvailable = false;
+  let nvapiChecked = false;
 
   return async function readStats() {
     const [load, memory] = await Promise.all([
@@ -288,7 +291,31 @@ function createStatsReader() {
       }
     }
 
-    if (now - lastGpuRefresh >= GPU_REFRESH_MS) {
+    // Try NVAPI first for GPU metrics (no admin required)
+    let nvapiMetrics = null;
+    if (!nvapiChecked) {
+      nvapiAvailable = nvidiaPerf.isAvailable();
+      nvapiChecked = true;
+      if (nvapiAvailable) {
+        console.log('NVAPI addon loaded successfully');
+      }
+    }
+
+    if (nvapiAvailable) {
+      try {
+        nvapiMetrics = nvidiaPerf.getGpuMetrics();
+        if (nvapiMetrics && nvapiMetrics.gpus && nvapiMetrics.gpus.length > 0) {
+          hasPrimaryGpuTelemetry = true;
+          gpuTelemetrySource = 'nvapi';
+        }
+      } catch (error) {
+        console.warn('NVAPI metrics failed:', error.message);
+        nvapiAvailable = false;
+        nvapiMetrics = null;
+      }
+    }
+
+    if (!hasPrimaryGpuTelemetry && (now - lastGpuRefresh >= GPU_REFRESH_MS)) {
       lastGpuRefresh = now;
       try {
         const graphics = await systeminformation.graphics();
@@ -333,6 +360,71 @@ function createStatsReader() {
       }
     }
 
+    // Build GPU object from NVAPI if available, otherwise fall back
+    let gpuName = 'Graphics device not detected';
+    let gpuUsage = null;
+    let gpuTemp = null;
+    let gpuMemUsed = null;
+    let gpuMemTotal = null;
+    let gpuClock = null;
+    let gpuPower = null;
+    let detectedAdapters = [];
+
+    if (nvapiMetrics && nvapiMetrics.gpus && nvapiMetrics.gpus.length > 0) {
+      const gpu = nvapiMetrics.gpus[0];
+      gpuName = gpu.name || gpuName;
+      gpuUsage = Number.isFinite(gpu.gpuUtilization) ? gpu.gpuUtilization : 
+                 Number.isFinite(gpu.utilization) ? gpu.utilization : null;
+      gpuTemp = Number.isFinite(gpu.temperature) ? gpu.temperature : null;
+      gpuMemUsed = Number.isFinite(gpu.memoryUsed) ? gpu.memoryUsed : 
+                   Number.isFinite(gpu.memoryTotal) && Number.isFinite(gpu.memoryFree) ? gpu.memoryTotal - gpu.memoryFree : null;
+      gpuMemTotal = Number.isFinite(gpu.memoryTotal) ? gpu.memoryTotal : null;
+      gpuClock = Number.isFinite(gpu.clockGraphics) ? gpu.clockGraphics : 
+                 Number.isFinite(gpu.clockCore) ? gpu.clockCore : null;
+      gpuPower = Number.isFinite(gpu.powerDraw) ? gpu.powerDraw : null;
+
+      detectedAdapters = nvapiMetrics.gpus.map(g => ({
+        vendor: 'NVIDIA',
+        model: g.name || null,
+        name: g.name || null,
+        source: 'nvapi',
+        hasTelemetry: true,
+        busId: g.busId || null,
+        ramType: g.ramType || null,
+      }));
+    } else {
+      gpuName = gpuController.model || gpuController.name
+        || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
+        || 'Graphics device not detected';
+      gpuUsage = firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage);
+      gpuTemp = firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu);
+      gpuMemUsed = firstFinite(gpuController.memoryUsed, gpuSmiController.memoryUsed, gpuCounterMetrics.memoryUsed);
+      gpuMemTotal = firstFinite(gpuController.memoryTotal, gpuSmiController.memoryTotal, gpuCounterMetrics.memoryTotal);
+      gpuClock = firstFinite(gpuController.clockCore, gpuSmiController.clockCore);
+      gpuPower = firstFinite(gpuController.powerDraw, gpuSmiController.powerDraw);
+
+      detectedAdapters = [
+        ...gpuControllers.map(controller => ({
+          vendor: controller.vendor || null,
+          model: controller.model || null,
+          name: controller.name || null,
+          source: 'systeminformation',
+          hasTelemetry: [
+            controller.utilizationGpu,
+            controller.temperatureGpu,
+            controller.memoryTotal,
+            controller.memoryUsed,
+            controller.clockCore,
+            controller.powerDraw,
+          ].some(Number.isFinite),
+        })),
+        ...gpuWmiAdapters.map(name => ({ name, model: name, source: 'wmic', hasTelemetry: false })),
+        ...(gpuSmiController.name
+          ? [{ name: gpuSmiController.name, model: gpuSmiController.name, source: 'nvidia-smi', hasTelemetry: gpuTelemetrySource === 'nvidia-smi' }]
+          : []),
+      ];
+    }
+
     return {
       cpu: {
         name: resolveCpuName(cpuInfo, os.cpus().find(cpu => cpu.model)?.model),
@@ -347,42 +439,15 @@ function createStatsReader() {
         usage: memory.total ? Math.round((memory.used / memory.total) * 100) : 0,
       },
       gpu: {
-        name: gpuController.model || gpuController.name
-          || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
-          || 'Graphics device not detected',
-        usage: firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage) === null
-          ? null
-          : Math.round(firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage)),
-        temperature: firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu) === null
-          ? null
-          : Math.round(firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu)),
-        memoryUsed: firstFinite(gpuController.memoryUsed, gpuSmiController.memoryUsed, gpuCounterMetrics.memoryUsed),
-        memoryTotal: firstFinite(gpuController.memoryTotal, gpuSmiController.memoryTotal, gpuCounterMetrics.memoryTotal),
-        clock: firstFinite(gpuController.clockCore, gpuSmiController.clockCore) === null
-          ? null
-          : Math.round(firstFinite(gpuController.clockCore, gpuSmiController.clockCore)),
-        power: firstFinite(gpuController.powerDraw, gpuSmiController.powerDraw),
+        name: gpuName,
+        usage: gpuUsage === null ? null : Math.round(gpuUsage),
+        temperature: gpuTemp === null ? null : Math.round(gpuTemp),
+        memoryUsed: gpuMemUsed,
+        memoryTotal: gpuMemTotal,
+        clock: gpuClock === null ? null : Math.round(gpuClock),
+        power: gpuPower,
         telemetrySource: gpuTelemetrySource,
-        detectedAdapters: [
-          ...gpuControllers.map(controller => ({
-            vendor: controller.vendor || null,
-            model: controller.model || null,
-            name: controller.name || null,
-            source: 'systeminformation',
-            hasTelemetry: [
-              controller.utilizationGpu,
-              controller.temperatureGpu,
-              controller.memoryTotal,
-              controller.memoryUsed,
-              controller.clockCore,
-              controller.powerDraw,
-            ].some(Number.isFinite),
-          })),
-          ...gpuWmiAdapters.map(name => ({ name, model: name, source: 'wmic', hasTelemetry: false })),
-          ...(gpuSmiController.name
-            ? [{ name: gpuSmiController.name, model: gpuSmiController.name, source: 'nvidia-smi', hasTelemetry: gpuTelemetrySource === 'nvidia-smi' }]
-            : []),
-        ],
+        detectedAdapters,
       },
       sampledAt: now,
     };

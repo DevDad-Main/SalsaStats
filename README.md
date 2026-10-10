@@ -27,9 +27,28 @@ Choose **Overlay** in the dashboard. Use **Setup** in the overlay to adjust its 
 
 ## GeForce NOW And FPS
 
-SalsaStats does not currently capture game-render FPS. GeForce NOW's own statistics panel is the authoritative source for stream/network statistics; there is no documented API for SalsaStats to read those values. The local GeForce NOW client’s presentation rate is not the same as the game’s server-side render FPS, so SalsaStats does not label one as the other.
+SalsaStats does not currently capture game-render FPS. GeForce NOW's own statistics panel is the authoritative source for stream/network statistics; there is no documented API for SalsaStats to read those values. The local GeForce NOW client's presentation rate is not the same as the game's server-side render FPS, so SalsaStats does not label one as the other.
 
 If a game provides its own FPS counter, it may be visible in the streamed image, but SalsaStats does not read that counter. Reliable game FPS requires a supported capture source and may require permissions that are unavailable in a non-admin session.
+
+## NVIDIA NVAPI Support (Experimental)
+
+SalsaStats includes an optional native Node addon that uses the NVIDIA NVAPI SDK to query GPU performance counters directly. This works without administrator privileges on GeForce NOW and can provide:
+
+- GPU utilization, temperature, clock speeds, power draw, fan speed
+- Memory usage (VRAM) and total memory
+- PCIe throughput and utilization
+- Frame rate counter (if exposed by the driver on GFN hardware)
+
+The addon is built at install time via `node-gyp`. If the addon fails to load, SalsaStats gracefully falls back to the existing WMI/nvidia-smi/systeminformation sources. The telemetry source is shown in the dashboard as `nvapi` when active.
+
+To enable NVAPI support, build on Windows with Visual Studio Build Tools installed:
+```bash
+npm run build:addon
+npm run build:win
+```
+
+The addon requires the NVIDIA display driver to be installed (present on GFN rigs).
 
 ## Updates And Logs
 

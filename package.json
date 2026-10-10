@@ -8,17 +8,20 @@
     "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js",
     "test": "node --test",
     "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File build/create-icon.ps1 && node build/package-icon.js",
-    "build:win": "npm run build:icon && npm run check && npm test && electron-builder --win nsis --x64 --publish never",
-    "release:win": "npm run build:icon && npm run check && npm test && electron-builder --win nsis --x64 --publish always"
+    "build:addon": "cd nvidia-perf-addon && node-gyp rebuild --target=$(node -p \"require('electron').versions.electron\") --dist-url=https://electronjs.org/headers --arch=x64",
+    "build:win": "npm run build:icon && npm run build:addon && npm run check && npm test && electron-builder --win nsis --x64 --publish never",
+    "release:win": "npm run build:icon && npm run build:addon && npm run check && npm test && electron-builder --win nsis --x64 --publish always"
   },
   "license": "MIT",
   "dependencies": {
     "electron-updater": "6.8.9",
-    "systeminformation": "^5.18.6"
+    "systeminformation": "^5.18.6",
+    "node-addon-api": "^7.1.0"
   },
   "devDependencies": {
     "electron": "44.7.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "node-gyp": "^10.1.0"
   },
   "overrides": {
     "@electron/get": "5.1.0",
@@ -46,7 +49,9 @@
       "styles.css",
       "index.html",
       "loading.gif",
-      "package.json"
+      "package.json",
+      "nvidia-perf.js",
+      "nvidia-perf-addon/build/Release/nvidia_perf.node"
     ],
     "win": {
       "target": [
