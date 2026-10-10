@@ -178,6 +178,7 @@
               <label class="range-option">Group spacing <output class="range-output" id="spacing-output">0 px</output><input id="spacing-setting" type="range" min="0" max="60" value="0"></label>
               <label class="range-option">Background <output class="range-output" id="opacity-output">88%</output><input id="opacity-setting" type="range" min="0" max="100" value="88"></label>
               <label class="select-option">OSD style<select id="background-setting"><option value="none">None</option><option value="soft" selected>Soft</option><option value="full">Full</option></select></label>
+              <label class="check-option"><input id="border-setting" type="checkbox">Show border</label>
               <label class="color-option">GPU color<input type="color" data-color="gpu" value="#50f45d"></label>
               <label class="color-option">CPU color<input type="color" data-color="cpu" value="#4ea8ff"></label>
               <label class="color-option">RAM color<input type="color" data-color="memory" value="#ffb65d"></label>
@@ -277,7 +278,10 @@
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
       <div class="osd-edit-hint">Drag to move · corner resizes · bottom edge spaces the groups · Ctrl+Alt+E to lock</div>
-      <div class="osd-grip" aria-hidden="true"></div>
+      <div class="osd-grip" data-corner="nw" aria-hidden="true"></div>
+      <div class="osd-grip" data-corner="ne" aria-hidden="true"></div>
+      <div class="osd-grip" data-corner="sw" aria-hidden="true"></div>
+      <div class="osd-grip" data-corner="se" aria-hidden="true"></div>
       <div class="osd-grip-bottom" aria-hidden="true"></div>
       <section class="osd-group" data-group="gpu">
         <h2 class="osd-group-title"><span>GPU</span><span class="osd-device-name" data-field="gpuName" title="Detecting graphics device">Detecting graphics device</span></h2>
@@ -308,22 +312,33 @@
     </div>
   </section>
 
-  <dialog class="file-picker" id="file-picker" aria-label="Choose a game executable">
-    <div class="picker-header"><strong>Choose a game executable</strong><button class="window-action" id="picker-close" type="button">Cancel</button></div>
-    <div class="picker-bar">
+  <dialog class="file-picker" id="file-picker" aria-labelledby="picker-title">
+    <header class="picker-head">
+      <div>
+        <h3 id="picker-title">Add games</h3>
+        <p>Pick a game's .exe, or open a folder and add every game inside it.</p>
+      </div>
+      <button class="picker-x" id="picker-close" type="button" aria-label="Close">&times;</button>
+    </header>
+    <nav class="picker-nav" aria-label="Location">
       <button class="window-action" id="picker-home" type="button">This PC</button>
       <button class="window-action" id="picker-up" type="button">Up</button>
-      <button class="window-action" id="picker-scan" type="button" title="Find a game in every subfolder of this folder">Add games in this folder</button>
-      <button class="window-action" id="picker-system" type="button" title="Use the Windows file dialog instead">System dialog</button>
-    </div>
-    <code class="picker-path" id="picker-path"></code>
-    <input class="picker-filter" id="picker-filter" type="text" placeholder="Filter this folder" aria-label="Filter this folder">
+      <div class="picker-crumbs" id="picker-path"></div>
+    </nav>
+    <input class="picker-filter" id="picker-filter" type="search" placeholder="Filter this folder" aria-label="Filter this folder">
     <ul class="picker-list" id="picker-list"></ul>
-    <div class="button-row" id="picker-scan-actions" hidden>
-      <button class="window-action primary" id="picker-scan-add" type="button">Add selected</button>
-      <button class="window-action" id="picker-scan-back" type="button">Back</button>
-    </div>
-    <p class="setting-note" id="picker-status" role="status"></p>
+    <p class="setting-note picker-status" id="picker-status" role="status"></p>
+    <footer class="picker-foot">
+      <button class="window-action" id="picker-system" type="button" title="Use the Windows file dialog instead">System dialog</button>
+      <span class="bar-spacer"></span>
+      <button class="window-action primary" id="picker-scan" type="button" title="Find a game in every subfolder of this folder">Add all games in this folder</button>
+      <div class="picker-scan-actions" id="picker-scan-actions" hidden>
+        <button class="window-action" id="picker-select-all" type="button">Select all</button>
+        <button class="window-action" id="picker-select-none" type="button">None</button>
+        <button class="window-action" id="picker-scan-back" type="button">Back</button>
+        <button class="window-action primary" id="picker-scan-add" type="button">Add selected</button>
+      </div>
+    </footer>
   </dialog>
 
   <script src="renderer.js" defer></script>

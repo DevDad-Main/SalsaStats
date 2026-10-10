@@ -424,3 +424,43 @@
     .picker-item.exe { color: var(--mint); }
     .scan-row { padding: 6px 8px; border-radius: 6px; }
     .scan-row:hover { background: var(--surface-soft); }
+
+    /* Overlay: content height drives the window, corners resize from any side */
+    body.overlay .osd-shell { flex: 0 0 auto; }
+    body.osd-editing .osd-grip { width: 16px; height: 16px; right: auto; bottom: auto; }
+    body.osd-editing .osd-grip[data-corner="nw"] { top: 0; left: 0; cursor: nwse-resize; background: linear-gradient(135deg, var(--lime) 50%, transparent 50%); }
+    body.osd-editing .osd-grip[data-corner="ne"] { top: 0; right: 0; cursor: nesw-resize; background: linear-gradient(225deg, var(--lime) 50%, transparent 50%); }
+    body.osd-editing .osd-grip[data-corner="sw"] { bottom: 0; left: 0; cursor: nesw-resize; background: linear-gradient(45deg, var(--lime) 50%, transparent 50%); }
+    body.osd-editing .osd-grip[data-corner="se"] { bottom: 0; right: 0; cursor: nwse-resize; background: linear-gradient(315deg, var(--lime) 50%, transparent 50%); }
+
+    /* Game picker */
+    .file-picker { width: min(680px, 94vw); padding: 0; gap: 0; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+    .file-picker[open] { gap: 0; }
+    .picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; }
+    .picker-head h3 { margin: 0; font-size: 17px; }
+    .picker-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .picker-x { width: 30px; height: 30px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 22px; line-height: 1; cursor: pointer; }
+    .picker-x:hover { color: var(--text); background: var(--surface-soft); }
+    .picker-nav { display: flex; align-items: center; gap: 8px; padding: 0 20px 10px; }
+    .picker-nav .window-action { border-color: var(--line); background: var(--surface); flex: none; }
+    .picker-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; color: var(--muted); }
+    .crumb { padding: 2px 6px; border: 0; border-radius: 4px; color: var(--text); background: transparent; font: inherit; cursor: pointer; }
+    .crumb:hover { background: var(--surface-soft); color: var(--lime); }
+    .picker-filter { margin: 0 20px 10px; }
+    .picker-list { margin: 0; padding: 0 12px; min-height: 180px; max-height: 40vh; border-top: 1px solid var(--line); }
+    .picker-item, .scan-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border-radius: 8px; }
+    .scan-row { cursor: pointer; color: var(--text); font-size: 13px; }
+    .picker-icon { flex: none; width: 18px; height: 14px; border-radius: 3px; background: #d9a441; }
+    .picker-icon.exe { width: 16px; height: 16px; border-radius: 4px; background: var(--mint); }
+    .picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .picker-kind { flex: none; max-width: 45%; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .picker-item.exe { color: var(--text); }
+    .picker-status { margin: 0; padding: 8px 20px; min-height: 34px; }
+    .picker-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface); }
+    .picker-foot .window-action:not(.primary) { border-color: var(--line); background: var(--surface-raised); }
+    .picker-scan-actions { display: flex; gap: 8px; }
+    .picker-foot .window-action:disabled { opacity: .5; cursor: default; }
+
+    /* No gap above the first visible group; optional border */
+    .osd-group.first, body.osd-minimal .osd-group.first { margin-top: 0; }
+    body .osd-shell.no-border { border-color: transparent !important; }

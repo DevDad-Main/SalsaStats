@@ -41,6 +41,7 @@
       scale: 100,
       size: 100,
       spacing: 0,
+      border: true,
       opacity: 88,
       backgroundMode: 'soft',
       anchor: 'top-right',
@@ -74,7 +75,7 @@
     delete settings.gameNames;
 
     // A profile is the part of the overlay look a game can override.
-    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'spacing', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
+    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'spacing', 'border', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
     function copyProfile(source) {
       return JSON.parse(JSON.stringify(Object.fromEntries(PROFILE_KEYS.map(key => [key, source[key]]))));
     }
@@ -146,6 +147,7 @@
         shell.classList.toggle('background-none', P.backgroundMode === 'none');
         shell.classList.toggle('background-soft', P.backgroundMode === 'soft');
         shell.classList.toggle('background-full', P.backgroundMode === 'full');
+        shell.classList.toggle('no-border', P.border === false);
       });
       Object.entries(P.colors).forEach(([name, color]) => {
         root.style.setProperty(`--${name}-color`, color);
@@ -179,6 +181,14 @@
         }
       });
 
+      document.querySelectorAll('.osd-shell').forEach(shell => {
+        let first = true;
+        shell.querySelectorAll('.osd-group').forEach(group => {
+          group.classList.toggle('first', first && !group.hidden);
+          if (!group.hidden) first = false;
+        });
+      });
+
       document.querySelectorAll('[data-setting]').forEach(input => {
         input.checked = E.visible[input.dataset.setting] !== false;
       });
@@ -194,6 +204,7 @@
       document.getElementById('opacity-setting').value = E.opacity;
       document.getElementById('opacity-output').textContent = `${E.opacity}%`;
       document.getElementById('background-setting').value = E.backgroundMode;
+      document.getElementById('border-setting').checked = E.border !== false;
       document.getElementById('anchor-setting').value = settings.anchor;
       document.getElementById('overlay-above-games').checked = settings.overlayAboveGames === true;
       document.getElementById('fps-mode').value = settings.fpsMode;
@@ -229,6 +240,11 @@
     });
     document.getElementById('opacity-setting').addEventListener('input', event => {
       editTarget().opacity = Number(event.target.value);
+      saveSettings();
+      applySettings();
+    });
+    document.getElementById('border-setting').addEventListener('change', event => {
+      editTarget().border = event.target.checked;
       saveSettings();
       applySettings();
     });
@@ -387,12 +403,34 @@
     let pickerListing = { path: '', parent: null, entries: [] };
     let scanResults = null;
 
+    function renderCrumbs() {
+      const crumbs = document.getElementById('picker-path');
+      crumbs.textContent = '';
+      const add = (label, target) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'crumb';
+        button.textContent = label;
+        button.addEventListener('click', () => openFolder(target));
+        crumbs.append(button);
+      };
+      add('This PC', '');
+      const parts = (pickerListing.path || '').split('\\').filter(Boolean);
+      parts.forEach((part, index) => {
+        const separator = document.createElement('span');
+        separator.textContent = '\u203A';
+        crumbs.append(separator);
+        add(part, `${parts.slice(0, index + 1).join('\\')}\\`);
+      });
+    }
+
     function renderPicker() {
       document.getElementById('picker-scan-actions').hidden = !scanResults;
+      document.getElementById('picker-scan').hidden = Boolean(scanResults);
       document.getElementById('picker-scan').disabled = !pickerListing.path;
       if (scanResults) return;
       const filter = document.getElementById('picker-filter').value.trim().toLowerCase();
-      document.getElementById('picker-path').textContent = pickerListing.path || 'This PC';
+      renderCrumbs();
       document.getElementById('picker-up').disabled = !pickerListing.path;
       pickerList.textContent = '';
       pickerListing.entries
@@ -402,7 +440,15 @@
           const button = document.createElement('button');
           button.type = 'button';
           button.className = `picker-item ${entry.type}`;
-          button.textContent = entry.type === 'dir' ? `\u{1F4C1} ${entry.name}` : entry.name;
+          const icon = document.createElement('span');
+          icon.className = `picker-icon ${entry.type}`;
+          const name = document.createElement('span');
+          name.className = 'picker-name';
+          name.textContent = entry.name;
+          const kind = document.createElement('span');
+          kind.className = 'picker-kind';
+          kind.textContent = entry.type === 'dir' ? 'Folder' : 'Game .exe';
+          button.append(icon, name, kind);
           button.addEventListener('click', () => {
             if (entry.type === 'dir') {
               openFolder(entry.path);
@@ -439,24 +485,40 @@
     });
     document.getElementById('picker-close').addEventListener('click', () => picker.close());
 
+    function updateScanCount() {
+      const count = scanResults.filter(game => game.selected && !game.known).length;
+      const add = document.getElementById('picker-scan-add');
+      add.textContent = `Add selected (${count})`;
+      add.disabled = count === 0;
+    }
+
     function renderScan(truncated) {
       pickerList.textContent = '';
       document.getElementById('picker-scan-actions').hidden = false;
+      document.getElementById('picker-scan').hidden = true;
       scanResults.forEach(game => {
         const item = document.createElement('li');
         const label = document.createElement('label');
-        label.className = 'check-option scan-row';
+        label.className = 'scan-row';
         const box = document.createElement('input');
         box.type = 'checkbox';
         box.checked = game.selected;
         box.disabled = game.known;
-        box.addEventListener('change', () => { game.selected = box.checked; });
-        const text = document.createElement('span');
-        text.textContent = game.known ? `${game.name} (already added)` : `${game.name}  \u2014  ${game.exe}`;
-        label.append(box, text);
+        box.addEventListener('change', () => {
+          game.selected = box.checked;
+          updateScanCount();
+        });
+        const name = document.createElement('span');
+        name.className = 'picker-name';
+        name.textContent = game.name;
+        const exe = document.createElement('span');
+        exe.className = 'picker-kind';
+        exe.textContent = game.known ? 'Already in library' : game.exe;
+        label.append(box, name, exe);
         item.append(label);
         pickerList.append(item);
       });
+      updateScanCount();
       pickerStatus.textContent = scanResults.length
         ? `${scanResults.length} games found. Untick any you don't want.${truncated ? ' The scan stopped early; try a smaller folder for the rest.' : ''}`
         : 'No games found in this folder.';
@@ -475,6 +537,14 @@
     document.getElementById('picker-scan-back').addEventListener('click', () => {
       scanResults = null;
       renderPicker();
+    });
+    document.getElementById('picker-select-all').addEventListener('click', () => {
+      scanResults.forEach(game => { game.selected = !game.known; });
+      renderScan(false);
+    });
+    document.getElementById('picker-select-none').addEventListener('click', () => {
+      scanResults.forEach(game => { game.selected = false; });
+      renderScan(false);
     });
     document.getElementById('picker-scan-add').addEventListener('click', () => {
       const chosen = (scanResults || []).filter(game => game.selected && !game.known);
@@ -787,28 +857,41 @@
       dragState = null;
     });
 
-    // Dragging the corner grip resizes the overlay (edit mode only, when it accepts the mouse).
-    const osdGrip = osdPanel.querySelector('.osd-grip');
-    osdGrip.addEventListener('pointerdown', event => {
-      event.preventDefault();
-      osdGrip.setPointerCapture(event.pointerId);
-      const startX = event.screenX;
-      const profile = appliedProfile();
-      const startSize = profile.size;
-      const move = moveEvent => {
-        const size = Math.max(70, Math.min(150, Math.round(startSize + (moveEvent.screenX - startX) / 3.4)));
-        profile.size = size;
-        profile.scale = Math.max(80, Math.min(140, size));
-        applySettings();
-        statsApi.setScale(profile.size);
-      };
-      const finish = () => {
-        osdGrip.removeEventListener('pointermove', move);
-        osdGrip.removeEventListener('pointerup', finish);
-        saveSettings();
-      };
-      osdGrip.addEventListener('pointermove', move);
-      osdGrip.addEventListener('pointerup', finish);
+    // Dragging any corner grip scales the overlay; the opposite corner stays where it is.
+    osdPanel.querySelectorAll('.osd-grip').forEach(grip => {
+      const corner = grip.dataset.corner;
+      grip.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        grip.setPointerCapture(event.pointerId);
+        const startX = event.screenX;
+        const profile = appliedProfile();
+        const startSize = profile.size;
+        const start = { left: window.screenX, top: window.screenY, width: window.outerWidth, height: window.outerHeight };
+        const westward = corner.includes('w');
+        const northward = corner.includes('n');
+        const move = moveEvent => {
+          const delta = (moveEvent.screenX - startX) / 3.4;
+          const size = Math.max(70, Math.min(150, Math.round(startSize + (westward ? -delta : delta))));
+          profile.size = size;
+          profile.scale = Math.max(80, Math.min(140, size));
+          applySettings();
+          statsApi.setScale(profile.size);
+          if (!westward && !northward) return;
+          const width = Math.round(340 * Math.max(0.7, Math.min(1.5, size / 100)));
+          const height = Math.ceil(osdPanel.getBoundingClientRect().height) + 16;
+          statsApi.moveWindow({
+            x: westward ? start.left + start.width - width : start.left,
+            y: northward ? start.top + start.height - height : start.top,
+          });
+        };
+        const finish = () => {
+          grip.removeEventListener('pointermove', move);
+          grip.removeEventListener('pointerup', finish);
+          saveSettings();
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', finish);
+      });
     });
 
     // Dragging the bottom edge adds spacing between the groups; the window height follows the content.
