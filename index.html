@@ -135,6 +135,23 @@
             </div>
           </section>
           <section class="settings-group">
+            <h3>Minimal view</h3>
+            <p class="setting-note">Press Ctrl+Alt+M in game to switch to a slim overlay showing only these readings.</p>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-minimal="fpsCurrent">Current FPS</label>
+              <label class="check-option"><input type="checkbox" data-minimal="fpsAverage">Average FPS</label>
+              <label class="check-option"><input type="checkbox" data-minimal="fpsLow">1% low</label>
+              <label class="check-option"><input type="checkbox" data-minimal="gpuUsage">GPU usage</label>
+              <label class="check-option"><input type="checkbox" data-minimal="gpuTemp">GPU temperature</label>
+              <label class="check-option"><input type="checkbox" data-minimal="gpuVram">GPU VRAM</label>
+              <label class="check-option"><input type="checkbox" data-minimal="gpuClock">GPU clock</label>
+              <label class="check-option"><input type="checkbox" data-minimal="cpuUsage">CPU usage</label>
+              <label class="check-option"><input type="checkbox" data-minimal="cpuTemp">CPU temperature</label>
+              <label class="check-option"><input type="checkbox" data-minimal="memoryUsage">RAM usage</label>
+            </div>
+            <label class="check-option extra"><input id="hide-unavailable" type="checkbox">Hide readings that are unavailable</label>
+          </section>
+          <section class="settings-group">
             <h3>Appearance</h3>
             <div class="appearance-options">
               <label class="range-option">Text size <output class="range-output" id="scale-output">100%</output><input id="scale-setting" type="range" min="80" max="140" value="100"></label>
@@ -161,6 +178,16 @@
         <div><div class="eyebrow">Preferences</div><h2>App settings</h2></div>
       </div>
       <div class="settings-controls single">
+        <section class="settings-group">
+          <h3>Keybinds</h3>
+          <p class="setting-note">The overlay ignores the mouse, so use these while playing.</p>
+          <ul class="keybind-list">
+            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>O</kbd><span>Open the dashboard and overlay settings</span></li>
+            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd><span>Switch the overlay to the minimal view and back</span></li>
+            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>H</kbd><span>Hide or show the overlay</span></li>
+            <li><kbd>Ctrl</kbd> + <kbd>`</kbd><span>Show or hide the log panel (dashboard)</span></li>
+          </ul>
+        </section>
         <section class="settings-group">
           <h3>Frame rate</h3>
           <label class="select-option">Display mode<select id="fps-mode"><option value="raw">Raw render FPS</option><option value="capped">Capped to stream rate</option></select></label>
@@ -227,11 +254,6 @@
 
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
-      <div class="osd-topbar osd-tools">
-        <span class="osd-brand">SalsaStats</span><span class="osd-spacer"></span>
-        <button class="osd-control" id="overlay-customize" type="button">SETUP</button>
-        <button class="osd-control" id="overlay-dashboard" type="button">DASHBOARD</button>
-      </div>
       <section class="osd-group" data-group="gpu">
         <h2 class="osd-group-title"><span>GPU</span><span class="osd-device-name" data-field="gpuName" title="Detecting graphics device">Detecting graphics device</span></h2>
         <div class="osd-row" data-row="gpuTemp"><span class="osd-label">GPU Temp</span><span class="osd-value"><span data-field="gpuTemp">--</span><span class="osd-unit">C</span></span></div>

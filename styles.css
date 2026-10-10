@@ -337,3 +337,18 @@
     .level-warn .log-level, .level-warn .log-message { color: var(--amber); }
     .level-error .log-level, .level-error .log-message { color: #ff6b6b; }
     .log-body[data-filter="warn"] .level-info, .log-body[data-filter="error"] .level-info, .log-body[data-filter="error"] .level-warn { display: none; }
+
+    /* Minimal overlay, hidden unavailable readings, keybinds */
+    body.hide-unavailable .osd-row.unavailable { display: none; }
+    body.osd-minimal .osd-group-title, body.osd-minimal .osd-chart-block { display: none; }
+    body.osd-minimal .osd-shell { width: fit-content; min-width: 190px; }
+    body.osd-minimal .osd-group { margin-top: 0; }
+    .check-option.extra { margin-top: 12px; }
+    .keybind-list { margin: 10px 0 0; padding: 0; list-style: none; }
+    .keybind-list li { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px; color: #c3cdda; }
+    .keybind-list kbd { padding: 2px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); font: 11px Consolas, monospace; color: var(--text); }
+    .keybind-list span { margin-left: auto; color: var(--muted); text-align: right; }
+    body.overlay .overlay-mode { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    body.osd-minimal .osd-shell { align-self: flex-start; }
+    body.osd-minimal.anchor-right .osd-shell { align-self: flex-end; }
+    body.osd-minimal.anchor-bottom .osd-shell { margin-top: auto; }

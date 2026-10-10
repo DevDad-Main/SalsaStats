@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('salsaStats', {
   copyText: text => ipcRenderer.invoke('clipboard:write', text),
   reportError: (message, details, fatal = false) => ipcRenderer.send('renderer:error', { message, details, fatal }),
   getUpdateState: () => ipcRenderer.invoke('updates:get-state'),
+  onShortcut: callback => {
+    const listener = (_event, action) => callback(action);
+    ipcRenderer.on('shortcut', listener);
+    return () => ipcRenderer.removeListener('shortcut', listener);
+  },
   installUpdate: () => ipcRenderer.send('updates:install'),
   onUpdateState: callback => {
     const listener = (_event, state) => callback(state);

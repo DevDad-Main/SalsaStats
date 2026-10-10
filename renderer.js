@@ -47,6 +47,9 @@
       fpsMode: 'raw',
       fpsCap: 60,
       gameNames: {},
+      minimal: false,
+      minimalRows: { fpsCurrent: true, gpuUsage: true, gpuTemp: true, cpuUsage: true },
+      hideUnavailable: true,
     };
 
     let settings = defaultSettings;
@@ -59,6 +62,7 @@
           visible: { ...defaultSettings.visible, ...saved.visible },
           colors: { ...defaultSettings.colors, ...saved.colors },
           gameNames: { ...saved.gameNames },
+          minimalRows: { ...defaultSettings.minimalRows, ...saved.minimalRows },
         };
       }
     } catch (error) {
@@ -68,7 +72,6 @@
     const preview = osdPanel.cloneNode(true);
     preview.removeAttribute('id');
     preview.classList.add('preview-osd');
-    preview.querySelector('.osd-tools').remove();
     previewStage.append(preview);
 
     function saveSettings() {
@@ -91,16 +94,26 @@
 
       document.querySelectorAll('[data-row]').forEach(row => {
         const setting = row.dataset.row;
-        row.hidden = Object.prototype.hasOwnProperty.call(settings.visible, setting)
+        let hidden = Object.prototype.hasOwnProperty.call(settings.visible, setting)
           ? !settings.visible[setting]
           : false;
+        if (settings.minimal && !settings.minimalRows[setting]) hidden = true;
+        row.hidden = hidden;
       });
+      document.body.classList.toggle('osd-minimal', settings.minimal);
+      document.body.classList.toggle('anchor-right', settings.anchor.endsWith('right'));
+      document.body.classList.toggle('anchor-bottom', settings.anchor.startsWith('bottom'));
+      document.body.classList.toggle('hide-unavailable', settings.hideUnavailable);
+      document.querySelectorAll('[data-minimal]').forEach(input => {
+        input.checked = settings.minimalRows[input.dataset.minimal] === true;
+      });
+      document.getElementById('hide-unavailable').checked = settings.hideUnavailable;
       document.querySelectorAll('.osd-group').forEach(group => {
         const rows = [...group.querySelectorAll('[data-row]')];
         if (group.dataset.group === 'fps') {
           const fpsRows = rows.filter(row => row.dataset.row !== 'fpsNote');
           const hasVisibleMetric = fpsRows.some(row => !row.hidden);
-          group.querySelector('[data-row="fpsNote"]').hidden = !hasVisibleMetric;
+          group.querySelector('[data-row="fpsNote"]').hidden = !hasVisibleMetric || settings.minimal;
           group.hidden = !hasVisibleMetric;
         } else {
           group.hidden = rows.length > 0 && rows.every(row => row.hidden);
@@ -166,6 +179,7 @@
     document.getElementById('anchor-setting').addEventListener('change', event => {
       settings.anchor = event.target.value;
       saveSettings();
+      applySettings();
       statsApi.setAnchor(settings.anchor);
     });
     document.getElementById('overlay-above-games').addEventListener('change', event => {
@@ -421,6 +435,18 @@
       setField('cpuPower', 'Unavailable');
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
+      const unavailable = {
+        gpuTemp: stats.gpu.temperature === null,
+        gpuClock: stats.gpu.clock === null,
+        gpuPower: stats.gpu.power === null,
+        gpuVram: !Number.isFinite(stats.gpu.memoryUsed),
+        cpuTemp: stats.cpu.temperature === null,
+        cpuClock: stats.cpu.clock === null,
+        cpuPower: true,
+      };
+      Object.entries(unavailable).forEach(([row, isUnavailable]) => {
+        document.querySelectorAll(`[data-row="${row}"]`).forEach(element => element.classList.toggle('unavailable', isUnavailable));
+      });
       document.getElementById('status-gpu').textContent = `GPU source: ${stats.gpu.telemetrySource}`;
       const captureLabels = { capturing: 'capturing', active: 'waiting for a game', starting: 'starting', error: 'needs administrator', missing: 'unavailable', off: 'off' };
       document.getElementById('status-capture').textContent = `Frame capture: ${captureLabels[stats.frames?.status] || 'unavailable'}`;
@@ -687,9 +713,27 @@
       setMode(document.body.classList.contains('compact') ? 'full' : 'compact');
     });
     overlayToggle.addEventListener('click', () => setMode('overlay'));
-    document.getElementById('overlay-customize').addEventListener('click', openSettings);
-    document.getElementById('overlay-dashboard').addEventListener('click', () => setMode('full'));
     document.getElementById('settings-overlay').addEventListener('click', () => setMode('overlay'));
+    document.querySelectorAll('[data-minimal]').forEach(input => {
+      input.addEventListener('change', () => {
+        settings.minimalRows[input.dataset.minimal] = input.checked;
+        saveSettings();
+        applySettings();
+      });
+    });
+    document.getElementById('hide-unavailable').addEventListener('change', event => {
+      settings.hideUnavailable = event.target.checked;
+      saveSettings();
+      applySettings();
+    });
+    statsApi.onShortcut?.(action => {
+      if (action === 'customize') openSettings();
+      if (action === 'minimal') {
+        settings.minimal = !settings.minimal;
+        saveSettings();
+        applySettings();
+      }
+    });
 
     pinToggle.addEventListener('click', () => {
       const pinned = pinToggle.getAttribute('aria-pressed') !== 'true';

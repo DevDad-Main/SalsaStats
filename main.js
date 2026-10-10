@@ -1,6 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
@@ -376,6 +376,8 @@ function applyWindowStacking() {
   const forceAboveGames = overlay && overlayAboveGames;
   // A focusable overlay steals activation, which makes fullscreen games minimise.
   mainWindow.setFocusable(!overlay);
+  // Click-through so the overlay never intercepts the mouse while gaming.
+  mainWindow.setIgnoreMouseEvents(overlay);
   mainWindow.setAlwaysOnTop(overlay || pinned, forceAboveGames ? 'screen-saver' : 'floating');
   if (forceAboveGames) mainWindow.moveTop();
 }
@@ -493,6 +495,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
   clearTimeout(shutdownTimer);
   clearTimeout(fatalDialogTimer);
 });
@@ -500,6 +503,44 @@ app.on('will-quit', () => {
 app.on('child-process-gone', (_event, details) => {
   if (!isQuitting) logger.writeSync('error', 'An Electron child process exited.', details);
 });
+
+const SHORTCUTS = {
+  customize: 'CommandOrControl+Alt+O',
+  minimal: 'CommandOrControl+Alt+M',
+  toggle: 'CommandOrControl+Alt+H',
+};
+
+function registerShortcuts() {
+  const send = action => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shortcut', action);
+  };
+  const handlers = {
+    customize: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (!mainWindow.isVisible()) mainWindow.show();
+      send('customize');
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed() && currentMode === 'full') mainWindow.focus();
+      }, 250);
+    },
+    minimal: () => send('minimal'),
+    toggle: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isVisible()) mainWindow.hide();
+      else if (currentMode === 'overlay') mainWindow.showInactive();
+      else mainWindow.show();
+    },
+  };
+  Object.entries(SHORTCUTS).forEach(([action, accelerator]) => {
+    let registered = false;
+    try {
+      registered = globalShortcut.register(accelerator, handlers[action]);
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to register a keybind.', { accelerator, message: error.message });
+    }
+    if (!registered) logger.writeSync('warn', 'Keybind is unavailable.', { action, accelerator });
+  });
+}
 
 app.whenReady().then(() => {
   initializeLogging();
@@ -513,6 +554,7 @@ app.whenReady().then(() => {
   registerUpdateHandlers();
   configureAutoUpdates();
   createWindow();
+  registerShortcuts();
   sampleStats();
 
   app.on('activate', () => {

@@ -1,79 +1,84 @@
 # SalsaStats
 
-![Windows release](https://github.com/DevDad-Main/SalsaStats/actions/workflows/release.yml/badge.svg)
+A small Windows overlay that shows what your PC is doing while you play: GPU, CPU, memory and frame rate, in a panel that stays out of your way.
 
-A lightweight Windows dashboard and overlay for live CPU, memory, and available GPU telemetry. SalsaStats runs without administrator privileges, injectors, or game hooks.
+I built it for GeForce NOW sessions (including setups made with tools like SalsaNOW), where all you normally see is the video stream. It runs inside the remote Windows session and reports what that machine is doing. It works on a normal gaming PC too.
 
-## Download
+SalsaStats is an independent project and isn't affiliated with NVIDIA or SalsaNOW.
 
-Get the latest x64 installer from [GitHub Releases](https://github.com/DevDad-Main/SalsaStats/releases/latest). The NSIS installer is configured for the current user and does not request administrator elevation.
+## Install
 
-The installer is unsigned. Windows SmartScreen may show a reputation warning, and managed-device application-control policies may block it. An unsigned build cannot override local organization policy.
+1. Download the latest `SalsaStats-x.y.z-x64-Setup.exe` from [Releases](https://github.com/DevDad-Main/SalsaStats/releases/latest).
+2. Run it. It installs for your user only and doesn't ask for administrator rights.
+3. SalsaStats updates itself from then on.
 
-## What It Shows
+The installer isn't code-signed, so Windows SmartScreen may warn you. Choose **More info**, then **Run anyway**.
 
-- CPU usage, model, core count, and available temperature/clock readings
-- Memory usage
-- GPU model, utilization, temperature, memory, clock, and power when exposed by the driver
-- A short CPU/GPU usage history
-- Full dashboard, compact view, and a configurable always-on-top overlay
-- Local rotating logs and recovery options for application errors
+## Using it
 
-Hardware availability depends on what Windows and the installed drivers expose. In GeForce NOW, SalsaStats can report only hardware visible inside that remote Windows session. Virtual display adapters are ignored when a physical GPU is available. If Electron's hardware library returns no GPU, SalsaStats silently queries Windows WMI for adapter names and GPU-engine/VRAM counters, then tries NVIDIA-SMI for additional readings. Missing commands or unsupported sensors are treated as unavailable, not fatal errors. WMI counters do not provide GPU temperature or board power, and may not expose total VRAM.
+Open the app and press **Overlay** to turn it into an always-on-top panel. The overlay ignores the mouse and never takes focus from your game, so you can leave it up without it getting in the way. Because of that, you control it with keys:
 
-## Overlay
+| Keys | What it does |
+| --- | --- |
+| `Ctrl` `Alt` `O` | Open the dashboard and overlay settings |
+| `Ctrl` `Alt` `M` | Switch between the full and the minimal overlay |
+| `Ctrl` `Alt` `H` | Hide or show the overlay |
+| `Ctrl` `` ` `` | Show or hide the log panel (in the dashboard) |
 
-Choose **Overlay** in the dashboard. Use **Setup** in the overlay to adjust its size, position, colors, and displayed metrics. Normal mode stays above ordinary windows without repeatedly raising itself. If a fullscreen game covers it, enable **Customize → Window behavior → Force above fullscreen games**. That stronger mode reasserts the overlay position and can disrupt games that react badly to focus/z-order changes; turn it off if a game minimizes or closes. Windows protected/exclusive-fullscreen presentation may still cover any desktop overlay.
+The dashboard has three tabs:
 
-## GeForce NOW And FPS
+- **Overview** shows live CPU, GPU and memory, a usage history and your frame rate.
+- **Overlay** lets you choose which readings appear, set colours, size and screen corner, and pick what the minimal view shows.
+- **Settings** has the FPS mode, custom game names, window behaviour and the log folder.
 
-SalsaStats does not currently capture game-render FPS. GeForce NOW's own statistics panel is the authoritative source for stream/network statistics; there is no documented API for SalsaStats to read those values. The local GeForce NOW client's presentation rate is not the same as the game's server-side render FPS, so SalsaStats does not label one as the other.
+## What it shows
 
-If a game provides its own FPS counter, it may be visible in the streamed image, but SalsaStats does not read that counter. Reliable game FPS requires a supported capture source and may require permissions that are unavailable in a non-admin session.
+- **GPU:** usage, temperature, clock and VRAM
+- **CPU:** usage, clock and temperature where Windows exposes them
+- **Memory:** RAM in use
+- **Frame rate:** current FPS, average and 1% low, with live graphs, for whichever game is running
 
-## NVIDIA NVAPI Support (Experimental)
+Readings the machine doesn't provide are hidden automatically. CPU and GPU power draw, for example, usually can't be read inside a cloud session.
 
-SalsaStats includes an optional native Node addon that uses the NVIDIA NVAPI SDK to query GPU performance counters directly. This works without administrator privileges on GeForce NOW and can provide:
+## Frame rate
 
-- GPU utilization, temperature, clock speeds, power draw, fan speed
-- Memory usage (VRAM) and total memory
-- PCIe throughput and utilization
-- Frame rate counter (if exposed by the driver on GFN hardware)
+SalsaStats measures frames the game presents on the machine it runs on, using [PresentMon](https://github.com/GameTechDev/PresentMon). That is the real render rate. In a cloud session it can be well above the rate of the stream you see.
 
-The addon is built at install time via `node-gyp`. If the addon fails to load, SalsaStats gracefully falls back to the existing WMI/nvidia-smi/systeminformation sources. The telemetry source is shown in the dashboard as `nvapi` when active.
+You can switch in **Settings → Frame rate**:
 
-To enable NVAPI support, build on Windows with Visual Studio Build Tools installed:
-```bash
-npm run build:addon
-npm run build:win
-```
+- **Raw render FPS** is what the game actually renders.
+- **Capped to stream rate** limits the numbers to your stream rate (30 to 240) to roughly match what GeForce NOW shows. SalsaStats can't read the real stream rate, so you set the cap yourself.
 
-The addon requires the NVIDIA display driver to be installed (present on GFN rigs).
+Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Without that, everything else still works. The status bar tells you when capture is unavailable.
 
-## Updates And Logs
+The game name comes from its window title. If it looks wrong, set your own under **Settings → Game names**.
 
-Packaged builds check GitHub Releases at startup and every six hours. Updates download in the background; SalsaStats offers a restart button after the download completes and will not restart in the middle of a session. Existing v1.0.0 installs must be manually upgraded to v1.0.2 once; v1.0.2 is the first published release with the updater.
+## If something looks off
 
-Logs default to `%APPDATA%\salsastats\logs`. Change or open the log folder from **Customize** under **Log folder**. Logs are JSON Lines, rotate at 2 MB, and retain up to three backups. A one-time startup record includes detected CPU/GPU names, adapters, and the telemetry source to help diagnose remote-session differences. Hardware readings and error logs stay on the PC; update checks contact GitHub.
+- **A game minimises or loses focus:** turn off **Force above fullscreen games** in Settings.
+- **GPU temperature or clock is missing:** open the log panel with the **Logs** button and check the startup line. It lists which hardware sources responded.
+- **The overlay is hidden behind a game:** exclusive-fullscreen games can cover any overlay. Use borderless or windowed mode.
 
-## Build And Test
+The log panel has filter, copy, pause and clear buttons, so it's easy to paste into a bug report. Logs are stored in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
 
-Requirements: Node.js 24 and npm. From a Windows development prompt:
+## Build it yourself
+
+You need Windows and Node.js 24.
 
 ```bash
 npm ci
-npm run check
-npm test
-npm start
+npm start          # run from source
+npm run build:win  # build the installer into release/
 ```
 
-Build a local x64 per-user installer without publishing it:
+The build downloads PresentMon and compiles a small helper that reads NVIDIA sensors through [NvAPIWrapper](https://github.com/falahati/NvAPIWrapper). Pushing a `v*` tag publishes a release through GitHub Actions.
 
-```bash
-npm run build:win
-```
+## Credits
 
-The installer and update metadata are written under `release/`. To publish, push a version tag such as `v1.0.2`; the Windows GitHub Actions workflow builds the installer and publishes the required updater feed files to the Releases page.
+- [PresentMon](https://github.com/GameTechDev/PresentMon) by Intel for frame timing
+- [NvAPIWrapper](https://github.com/falahati/NvAPIWrapper) for NVIDIA sensor readings
+- [systeminformation](https://github.com/sebhildebrandt/systeminformation) for CPU and GPU details
+- [Electron](https://www.electronjs.org/)
 
 ## License
 
