@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $root = Join-Path $PSScriptRoot '..'
 $out = Join-Path $root 'vendor\nvapi'
 $cache = Join-Path $root 'vendor\.cache'

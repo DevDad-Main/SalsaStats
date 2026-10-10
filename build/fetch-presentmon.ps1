@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $version = '2.3.1'
 $expectedSha256 = $env:PRESENTMON_SHA256
 $vendor = Join-Path $PSScriptRoot '..\vendor'
