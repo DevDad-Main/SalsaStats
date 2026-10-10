@@ -974,7 +974,23 @@ function registerShortcuts() {
   });
 }
 
+// Only one SalsaStats may run at a time; a second launch just brings the first one forward.
+const hasInstanceLock = app.requestSingleInstanceLock();
+if (!hasInstanceLock) app.quit();
+
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (currentMode === 'overlay') {
+    if (!mainWindow.isVisible()) mainWindow.showInactive();
+    return;
+  }
+  mainWindow.show();
+  mainWindow.focus();
+});
+
 app.whenReady().then(() => {
+  if (!hasInstanceLock) return;
   initializeLogging();
   registerLogHandlers();
   nvidiaPerf.start({ resourcesPath: process.resourcesPath, baseDirectory: __dirname, logger });

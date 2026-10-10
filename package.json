@@ -1,11 +1,11 @@
 {
   "name": "salsastats",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js && node --check presentmon.js && node --check nvidia-perf.js",
+    "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js && node --check presentmon.js && node --check nvidia-perf.js && node --check network.js",
     "test": "node --test",
     "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File build/create-icon.ps1 && node build/package-icon.js",
     "build:nvapi": "powershell -NoProfile -ExecutionPolicy Bypass -File build/build-nvapi-helper.ps1",
@@ -60,7 +60,8 @@
       "loading.gif",
       "package.json",
       "nvidia-perf.js",
-      "presentmon.js"
+      "presentmon.js",
+      "network.js"
     ],
     "win": {
       "target": [
