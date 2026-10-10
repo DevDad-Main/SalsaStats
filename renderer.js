@@ -40,6 +40,7 @@
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
       size: 100,
+      spacing: 0,
       opacity: 88,
       backgroundMode: 'soft',
       anchor: 'top-right',
@@ -73,7 +74,7 @@
     delete settings.gameNames;
 
     // A profile is the part of the overlay look a game can override.
-    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
+    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'spacing', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
     function copyProfile(source) {
       return JSON.parse(JSON.stringify(Object.fromEntries(PROFILE_KEYS.map(key => [key, source[key]]))));
     }
@@ -101,7 +102,18 @@
     let editingId = null;
     let activeGameId = null;
     const findGame = id => settings.games.find(game => game.id === id) || null;
-    const matchGame = exe => settings.games.find(game => game.exe === String(exe).toLowerCase()) || null;
+    // b1-Win64-Shipping.exe and b1.exe count as the same game.
+    function exeKey(name) {
+      const lower = String(name).toLowerCase().replace(/\.exe$/, '');
+      let key = lower;
+      let previous;
+      do {
+        previous = key;
+        key = key.replace(/[-_ ]?(shipping|win64|win32|x64|x86)$/, '');
+      } while (key !== previous && key);
+      return key || lower;
+    }
+    const matchGame = exe => settings.games.find(game => exeKey(game.exe) === exeKey(exe)) || null;
     function editTarget() {
       const game = findGame(editingId);
       return game && game.profile ? game.profile : settings;
@@ -127,6 +139,7 @@
       const E = editTarget();
       const root = document.documentElement;
       root.style.setProperty('--osd-scale', P.scale / 100);
+      root.style.setProperty('--osd-spacing', `${P.spacing || 0}px`);
       const effectiveOpacity = P.backgroundMode === 'none' ? 0 : P.opacity / 100;
       root.style.setProperty('--osd-opacity', effectiveOpacity);
       document.querySelectorAll('.osd-shell').forEach(shell => {
@@ -176,6 +189,8 @@
       document.getElementById('scale-output').textContent = `${E.scale}%`;
       document.getElementById('size-setting').value = E.size;
       document.getElementById('size-output').textContent = `${E.size}%`;
+      document.getElementById('spacing-setting').value = E.spacing || 0;
+      document.getElementById('spacing-output').textContent = `${E.spacing || 0} px`;
       document.getElementById('opacity-setting').value = E.opacity;
       document.getElementById('opacity-output').textContent = `${E.opacity}%`;
       document.getElementById('background-setting').value = E.backgroundMode;
@@ -214,6 +229,11 @@
     });
     document.getElementById('opacity-setting').addEventListener('input', event => {
       editTarget().opacity = Number(event.target.value);
+      saveSettings();
+      applySettings();
+    });
+    document.getElementById('spacing-setting').addEventListener('input', event => {
+      editTarget().spacing = Number(event.target.value);
       saveSettings();
       applySettings();
     });
@@ -347,7 +367,7 @@
     function addGame(exe, name) {
       const key = String(exe || '').trim().toLowerCase();
       if (!key) return;
-      const existing = settings.games.find(game => game.exe === key);
+      const existing = settings.games.find(game => exeKey(game.exe) === exeKey(key));
       if (existing) {
         gameStatus.textContent = `${existing.name} is already in your library.`;
         return;
@@ -361,13 +381,121 @@
       gameStatus.textContent = `Added ${game.name}. Rename it or customise its layout below.`;
     }
 
-    document.getElementById('game-browse').addEventListener('click', async () => {
+    const picker = document.getElementById('file-picker');
+    const pickerList = document.getElementById('picker-list');
+    const pickerStatus = document.getElementById('picker-status');
+    let pickerListing = { path: '', parent: null, entries: [] };
+    let scanResults = null;
+
+    function renderPicker() {
+      document.getElementById('picker-scan-actions').hidden = !scanResults;
+      document.getElementById('picker-scan').disabled = !pickerListing.path;
+      if (scanResults) return;
+      const filter = document.getElementById('picker-filter').value.trim().toLowerCase();
+      document.getElementById('picker-path').textContent = pickerListing.path || 'This PC';
+      document.getElementById('picker-up').disabled = !pickerListing.path;
+      pickerList.textContent = '';
+      pickerListing.entries
+        .filter(entry => !filter || entry.name.toLowerCase().includes(filter))
+        .forEach(entry => {
+          const item = document.createElement('li');
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `picker-item ${entry.type}`;
+          button.textContent = entry.type === 'dir' ? `\u{1F4C1} ${entry.name}` : entry.name;
+          button.addEventListener('click', () => {
+            if (entry.type === 'dir') {
+              openFolder(entry.path);
+            } else {
+              localStorage.setItem('salsastats-picker-dir', pickerListing.path);
+              picker.close();
+              addGame(entry.name);
+            }
+          });
+          item.append(button);
+          pickerList.append(item);
+        });
+      pickerStatus.textContent = pickerListing.error
+        ? `Cannot open this folder: ${pickerListing.error}`
+        : (pickerList.childElementCount ? '' : 'No folders or .exe files here.');
+    }
+
+    async function openFolder(directory) {
+      scanResults = null;
+      document.getElementById('picker-filter').value = '';
+      try {
+        pickerListing = (await statsApi.listDirectory(directory)) || { path: '', parent: null, entries: [] };
+      } catch {
+        pickerListing = { path: directory, parent: '', entries: [], error: 'Request failed.' };
+      }
+      renderPicker();
+      pickerList.scrollTop = 0;
+    }
+
+    document.getElementById('game-browse').addEventListener('click', () => {
       gameStatus.textContent = '';
+      picker.showModal();
+      openFolder(localStorage.getItem('salsastats-picker-dir') || '');
+    });
+    document.getElementById('picker-close').addEventListener('click', () => picker.close());
+
+    function renderScan(truncated) {
+      pickerList.textContent = '';
+      document.getElementById('picker-scan-actions').hidden = false;
+      scanResults.forEach(game => {
+        const item = document.createElement('li');
+        const label = document.createElement('label');
+        label.className = 'check-option scan-row';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = game.selected;
+        box.disabled = game.known;
+        box.addEventListener('change', () => { game.selected = box.checked; });
+        const text = document.createElement('span');
+        text.textContent = game.known ? `${game.name} (already added)` : `${game.name}  \u2014  ${game.exe}`;
+        label.append(box, text);
+        item.append(label);
+        pickerList.append(item);
+      });
+      pickerStatus.textContent = scanResults.length
+        ? `${scanResults.length} games found. Untick any you don't want.${truncated ? ' The scan stopped early; try a smaller folder for the rest.' : ''}`
+        : 'No games found in this folder.';
+    }
+
+    document.getElementById('picker-scan').addEventListener('click', async () => {
+      if (!pickerListing.path) return;
+      pickerStatus.textContent = 'Scanning...';
+      const result = await statsApi.scanGames(pickerListing.path).catch(() => null);
+      scanResults = ((result && result.games) || []).map(game => {
+        const known = settings.games.some(item => exeKey(item.exe) === exeKey(game.exe));
+        return { ...game, known, selected: !known };
+      });
+      renderScan(result && result.truncated);
+    });
+    document.getElementById('picker-scan-back').addEventListener('click', () => {
+      scanResults = null;
+      renderPicker();
+    });
+    document.getElementById('picker-scan-add').addEventListener('click', () => {
+      const chosen = (scanResults || []).filter(game => game.selected && !game.known);
+      chosen.forEach(game => addGame(game.exe, game.name));
+      localStorage.setItem('salsastats-picker-dir', pickerListing.path);
+      scanResults = null;
+      picker.close();
+      gameStatus.textContent = chosen.length ? `Added ${chosen.length} game${chosen.length === 1 ? '' : 's'} from the folder.` : 'No new games were added.';
+    });
+    document.getElementById('picker-home').addEventListener('click', () => openFolder(''));
+    document.getElementById('picker-up').addEventListener('click', () => openFolder(pickerListing.parent || ''));
+    document.getElementById('picker-filter').addEventListener('input', renderPicker);
+    document.getElementById('picker-system').addEventListener('click', async () => {
       try {
         const picked = await statsApi.browseGame();
-        if (picked) addGame(picked.exe);
+        if (picked) {
+          picker.close();
+          addGame(picked.exe);
+        }
       } catch {
-        gameStatus.textContent = 'Could not open the file picker.';
+        pickerStatus.textContent = 'Could not open the system dialog.';
       }
     });
     document.getElementById('game-current').addEventListener('click', () => {
@@ -636,6 +764,7 @@
       if (!document.body.classList.contains('overlay')) return;
       if (event.target.closest('button')) return;
       if (event.target.closest('.osd-grip')) return;
+      if (event.target.closest('.osd-grip-bottom')) return;
       const shell = event.target.closest('.osd-shell');
       if (!shell) return;
       const { screenX, screenY } = event;
@@ -682,6 +811,38 @@
       osdGrip.addEventListener('pointerup', finish);
     });
 
+    // Dragging the bottom edge adds spacing between the groups; the window height follows the content.
+    const osdGripBottom = osdPanel.querySelector('.osd-grip-bottom');
+    osdGripBottom.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      osdGripBottom.setPointerCapture(event.pointerId);
+      const startY = event.screenY;
+      const profile = appliedProfile();
+      const startSpacing = profile.spacing || 0;
+      const gaps = Math.max(1, osdPanel.querySelectorAll('.osd-group:not([hidden])').length - 1);
+      const move = moveEvent => {
+        profile.spacing = Math.max(0, Math.min(60, Math.round(startSpacing + (moveEvent.screenY - startY) / gaps)));
+        applySettings();
+      };
+      const finish = () => {
+        osdGripBottom.removeEventListener('pointermove', move);
+        osdGripBottom.removeEventListener('pointerup', finish);
+        saveSettings();
+      };
+      osdGripBottom.addEventListener('pointermove', move);
+      osdGripBottom.addEventListener('pointerup', finish);
+    });
+
+    let lastFitHeight = 0;
+    function fitOverlayHeight() {
+      if (!document.body.classList.contains('overlay')) return;
+      const height = Math.ceil(osdPanel.getBoundingClientRect().height) + 16;
+      if (height === lastFitHeight) return;
+      lastFitHeight = height;
+      statsApi.setOverlayHeight(height);
+    }
+    new ResizeObserver(fitOverlayHeight).observe(osdPanel);
+
     function setMode(mode) {
       document.body.classList.toggle('compact', mode === 'compact');
       document.body.classList.toggle('overlay', mode === 'overlay');
@@ -691,9 +852,11 @@
       overlayToggle.setAttribute('aria-pressed', String(mode === 'overlay'));
       statsApi.setMode(mode);
       applySettings();
+      lastFitHeight = 0;
       if (mode === 'overlay') {
         statsApi.setAnchor(settings.anchor);
         statsApi.setScale(appliedProfile().size);
+        requestAnimationFrame(fitOverlayHeight);
       }
       requestAnimationFrame(() => {
         drawChart();

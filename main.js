@@ -11,7 +11,6 @@ const SAMPLE_INTERVAL_MS = 2000;
 const OVERLAY_BASE_WIDTH = 340;
 const OVERLAY_BASE_HEIGHT = 490;
 const OVERLAY_MIN_WIDTH = 300;
-const OVERLAY_MIN_HEIGHT = 390;
 const OVERLAY_Z_ORDER_INTERVAL_MS = 1000;
 const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
@@ -173,7 +172,99 @@ function readLogTail(offset) {
   return { offset: start + lastNewline + 1, entries: lines.map(parseLogLine) };
 }
 
+function listDirectory(directory) {
+  if (!directory) {
+    const entries = [];
+    for (let code = 67; code <= 90; code += 1) {
+      const root = `${String.fromCharCode(code)}:\\`;
+      if (fs.existsSync(root)) entries.push({ name: root, type: 'dir', path: root });
+    }
+    ['desktop', 'documents', 'downloads'].forEach(key => {
+      try {
+        entries.push({ name: key[0].toUpperCase() + key.slice(1), type: 'dir', path: app.getPath(key) });
+      } catch {
+        // Folder not available on this machine.
+      }
+    });
+    return { path: '', parent: null, entries };
+  }
+
+  const resolved = path.resolve(String(directory));
+  const parent = resolved === path.parse(resolved).root ? '' : path.dirname(resolved);
+  const entries = [];
+  for (const item of fs.readdirSync(resolved, { withFileTypes: true })) {
+    if (item.isDirectory()) entries.push({ name: item.name, type: 'dir', path: path.join(resolved, item.name) });
+    else if (item.isFile() && /\.exe$/i.test(item.name)) entries.push({ name: item.name, type: 'exe', path: path.join(resolved, item.name) });
+    if (entries.length >= 3000) break;
+  }
+  entries.sort((a, b) => (a.type === b.type ? 0 : a.type === 'dir' ? -1 : 1)
+    || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  return { path: resolved, parent, entries };
+}
+
+// Finds one likely game executable (the largest non-installer .exe) per subfolder of `root`.
+function scanGames(root) {
+  const SKIP = /(unins|uninstall|crash|report|redist|vcredist|dxsetup|dotnet|setup|install|updater|helper|webview|easyanticheat|battleye|benchmark|prereq)/i;
+  const MAX_ENTRIES = 20000;
+  let visited = 0;
+  let truncated = false;
+
+  const collect = (directory, depth, found) => {
+    let items;
+    try {
+      items = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (++visited > MAX_ENTRIES) {
+        truncated = true;
+        return;
+      }
+      const full = path.join(directory, item.name);
+      if (item.isDirectory()) {
+        if (depth < 5) collect(full, depth + 1, found);
+      } else if (item.isFile() && /\.exe$/i.test(item.name) && !SKIP.test(item.name)) {
+        try {
+          found.push({ exe: item.name, path: full, size: fs.statSync(full).size });
+        } catch {
+          // Unreadable file; skip it.
+        }
+      }
+    }
+  };
+
+  const games = [];
+  for (const item of fs.readdirSync(root, { withFileTypes: true })) {
+    if (truncated || games.length >= 300) break;
+    if (!item.isDirectory()) continue;
+    const found = [];
+    collect(path.join(root, item.name), 1, found);
+    if (!found.length) continue;
+    const best = found.reduce((max, current) => (current.size > max.size ? current : max));
+    games.push({ name: item.name, exe: best.exe, path: best.path });
+  }
+  return { games, truncated };
+}
+
 function registerLogHandlers() {
+  ipcMain.handle('fs:scan', (event, directory) => {
+    if (!isTrustedRenderer(event) || !directory) return null;
+    try {
+      return scanGames(path.resolve(String(directory)));
+    } catch (error) {
+      logger.writeSync('warn', 'Unable to scan a folder for games.', error);
+      return { games: [], truncated: false };
+    }
+  });
+  ipcMain.handle('fs:list', (event, directory) => {
+    if (!isTrustedRenderer(event)) return null;
+    try {
+      return listDirectory(directory);
+    } catch (error) {
+      return { path: String(directory || ''), parent: '', entries: [], error: error.message };
+    }
+  });
   ipcMain.handle('clipboard:write', (event, text) => {
     if (!isTrustedRenderer(event) || typeof text !== 'string') return false;
     clipboard.writeText(text.slice(0, 1024 * 1024));
@@ -360,28 +451,65 @@ function saveOverlayPosition() {
   }
 }
 
+const modeBounds = {};
+
+function displayFor(bounds) {
+  return screen.getDisplayNearestPoint({
+    x: Math.round(bounds.x + bounds.width / 2),
+    y: Math.round(bounds.y + bounds.height / 2),
+  });
+}
+
+// Shrinks and shifts bounds so the whole rectangle stays inside the area.
+function fitInto(bounds, area) {
+  const width = Math.round(Math.min(bounds.width, area.width));
+  const height = Math.round(Math.min(bounds.height, area.height));
+  return {
+    x: Math.round(Math.max(area.x, Math.min(bounds.x, area.x + area.width - width))),
+    y: Math.round(Math.max(area.y, Math.min(bounds.y, area.y + area.height - height))),
+    width,
+    height,
+  };
+}
+
+function keepOnScreen() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.getBounds();
+  const display = displayFor(bounds);
+  mainWindow.setBounds(fitInto(bounds, currentMode === 'overlay' ? display.bounds : display.workArea), false);
+}
+
+function restoreModeBounds(kind, width, height, center) {
+  const saved = modeBounds[kind];
+  if (saved) {
+    mainWindow.setBounds(fitInto(saved, displayFor(saved).workArea), false);
+    return;
+  }
+  mainWindow.setSize(width, height, false);
+  if (center) mainWindow.center();
+}
+
 function positionOverlay() {
   if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
 
   if (overlayCustomPosition) {
-    const { workArea: area } = screen.getDisplayNearestPoint(overlayCustomPosition);
     const [w, h] = mainWindow.getSize();
-    const x = Math.max(area.x, Math.min(overlayCustomPosition.x, area.x + area.width - w));
-    const y = Math.max(area.y, Math.min(overlayCustomPosition.y, area.y + area.height - h));
-    mainWindow.setPosition(Math.round(x), Math.round(y), false);
+    const area = screen.getDisplayNearestPoint(overlayCustomPosition).bounds;
+    const next = fitInto({ x: overlayCustomPosition.x, y: overlayCustomPosition.y, width: w, height: h }, area);
+    mainWindow.setPosition(next.x, next.y, false);
     return;
   }
 
   const { workArea } = screen.getPrimaryDisplay();
   const [width, height] = mainWindow.getSize();
   const margin = 18;
-  const x = overlayAnchor.endsWith('right')
+  const x = Math.round(overlayAnchor.endsWith('right')
     ? workArea.x + workArea.width - width - margin
-    : workArea.x + margin;
-  const y = overlayAnchor.startsWith('bottom')
+    : workArea.x + margin);
+  const y = Math.round(overlayAnchor.startsWith('bottom')
     ? workArea.y + workArea.height - height - margin
-    : workArea.y + margin;
-  mainWindow.setPosition(x, y, true);
+    : workArea.y + margin);
+  mainWindow.setPosition(x, y, false);
 }
 
 function createWindow() {
@@ -434,6 +562,7 @@ function createWindow() {
   window.on('blur', () => {
     if (mainWindow === window && currentMode === 'overlay' && overlayAboveGames && !isQuitting) window.moveTop();
   });
+  window.on('restore', keepOnScreen);
   window.on('close', () => {
     isWindowClosing = true;
     clearInterval(overlayZOrderTimer);
@@ -447,7 +576,12 @@ function createWindow() {
 function registerWindowHandler(channel, handler) {
   ipcMain.on(channel, (event, ...args) => {
     if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
-    handler(...args);
+    try {
+      handler(...args);
+    } catch (error) {
+      // A bad window request must never take the whole app down.
+      logger.writeSync('warn', 'Window request failed.', { channel, message: error.message });
+    }
   });
 }
 
@@ -476,18 +610,20 @@ function syncOverlayZOrderMaintenance() {
 }
 
 registerWindowHandler('window:mode', mode => {
+  const previous = currentMode;
   currentMode = ['compact', 'overlay'].includes(mode) ? mode : 'full';
+  if (previous !== 'overlay' && previous !== currentMode) modeBounds[previous] = mainWindow.getBounds();
   if (currentMode !== 'overlay') overlayEditMode = false;
   if (currentMode === 'compact') {
     mainWindow.setMinimumSize(320, 210);
-    mainWindow.setSize(360, 260, true);
+    restoreModeBounds('compact', 360, 260, false);
   } else if (currentMode === 'overlay') {
-    mainWindow.setMinimumSize(OVERLAY_MIN_WIDTH, OVERLAY_MIN_HEIGHT);
-    mainWindow.setSize(OVERLAY_BASE_WIDTH, OVERLAY_BASE_HEIGHT, true);
+    // The renderer fits the height to its content, so the minimum stays small.
+    mainWindow.setMinimumSize(OVERLAY_MIN_WIDTH, 40);
+    mainWindow.setSize(OVERLAY_BASE_WIDTH, OVERLAY_BASE_HEIGHT, false);
   } else {
     mainWindow.setMinimumSize(640, 500);
-    mainWindow.setSize(1040, 720, true);
-    mainWindow.center();
+    restoreModeBounds('full', 1040, 720, true);
   }
   applyWindowStacking();
   syncOverlayZOrderMaintenance();
@@ -510,19 +646,33 @@ registerWindowHandler('window:scale', scaleValue => {
   if (!Number.isFinite(scale)) return;
   const boundedScale = Math.max(0.7, Math.min(1.5, scale));
   const width = Math.round(OVERLAY_BASE_WIDTH * boundedScale);
-  const height = Math.round(OVERLAY_BASE_HEIGHT * boundedScale);
-  mainWindow.setMinimumSize(
-    Math.round(OVERLAY_MIN_WIDTH * boundedScale),
-    Math.round(OVERLAY_MIN_HEIGHT * boundedScale),
-  );
-  mainWindow.setSize(width, height, true);
+  mainWindow.setMinimumSize(Math.round(OVERLAY_MIN_WIDTH * boundedScale), 40);
+  const [, currentHeight] = mainWindow.getSize();
+  mainWindow.setSize(width, currentHeight, false);
   if (!overlayEditMode && !overlayCustomPosition) positionOverlay();
+  else keepOnScreen();
+});
+
+registerWindowHandler('window:height', value => {
+  if (currentMode !== 'overlay') return;
+  const height = Math.round(Number(value));
+  if (!Number.isFinite(height)) return;
+  const [width, current] = mainWindow.getSize();
+  const next = Math.round(Math.max(40, Math.min(height, displayFor(mainWindow.getBounds()).bounds.height)));
+  if (Math.abs(next - current) < 2) return;
+  mainWindow.setSize(width, next, false);
+  if (!overlayEditMode && !overlayCustomPosition) positionOverlay();
+  else keepOnScreen();
 });
 
 registerWindowHandler('window:move', point => {
   if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return;
-  // Electron 44 rejects fractional coordinates from DPI-scaled pointer events.
-  mainWindow.setPosition(Math.round(Number(point.x)), Math.round(Number(point.y)), true);
+  const [width, height] = mainWindow.getSize();
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const area = currentMode === 'overlay' ? display.bounds : display.workArea;
+  // Electron 44 rejects fractional coordinates; fitInto rounds and keeps the window on the screen being used.
+  const next = fitInto({ x: Number(point.x), y: Number(point.y), width, height }, area);
+  mainWindow.setPosition(next.x, next.y, false);
 });
 
 registerWindowHandler('window:minimize', () => mainWindow.minimize());

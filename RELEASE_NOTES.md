@@ -1,13 +1,17 @@
-# SalsaStats 1.0.24
+# SalsaStats 1.0.25
 
 ## What's new
 
-- New Games tab: build a library of games by picking their .exe or adding the one that is running, give each a proper name, and give it its own overlay layout. The layout switches on automatically while that game is running. Existing custom game names are carried over.
-- The Overlay tab has a "Layout for" menu to edit the default layout or a single game's layout.
-- New Check for updates button in Settings, with the current version and update status. The version also shows in the status bar, and update checks are now written to the log.
+- Fix a crash when a game starts: window positions and sizes are now always whole numbers, and a failed window request is logged instead of stopping the app.
+- Games are now matched by their base name, so `b1.exe` and `b1-Win64-Shipping.exe` count as the same game for names and per-game layouts.
+- The overlay now stays on the screen you are using when you drag or resize it, and its height follows its content.
+- Drag the bottom edge in edit mode (Ctrl+Alt+E), or use the new Group spacing slider, to space out the GPU, CPU, memory and FPS blocks.
+- The dashboard and compact views remember their own size and position when you switch modes or restore the window.
+- Add games from a built-in file browser that doesn't depend on the Windows file dialog, and add every game in a folder at once.
+- Fix primary buttons showing dark text on a dark background.
 
 ## Install and update
 
-Download `SalsaStats-1.0.24-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
+Download `SalsaStats-1.0.25-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
 
 The installer is unsigned. SmartScreen or managed-device application-control policies may still warn or block it.

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('salsaStats', {
   setAnchor: (anchor, reset = false) => ipcRenderer.send(channels.setAnchor, anchor, reset),
   setOverlayAboveGames: enabled => ipcRenderer.send(channels.setOverlayAboveGames, enabled),
   setScale: scale => ipcRenderer.send(channels.setScale, scale),
+  setOverlayHeight: height => ipcRenderer.send('window:height', height),
   moveWindow: point => ipcRenderer.send(channels.moveWindow, point),
   minimize: () => ipcRenderer.send(channels.minimize),
   toggleFullscreen: () => ipcRenderer.send(channels.toggleFullscreen),
@@ -32,6 +33,8 @@ contextBridge.exposeInMainWorld('salsaStats', {
   checkForUpdates: () => ipcRenderer.invoke('updates:check'),
   getVersion: () => ipcRenderer.invoke('app:get-version'),
   browseGame: () => ipcRenderer.invoke('games:browse'),
+  listDirectory: directory => ipcRenderer.invoke('fs:list', directory),
+  scanGames: directory => ipcRenderer.invoke('fs:scan', directory),
   onShortcut: callback => {
     const listener = (_event, action) => callback(action);
     ipcRenderer.on('shortcut', listener);

@@ -175,6 +175,7 @@
             <div class="appearance-options">
               <label class="range-option">Text size <output class="range-output" id="scale-output">100%</output><input id="scale-setting" type="range" min="80" max="140" value="100"></label>
               <label class="range-option">Panel size <output class="range-output" id="size-output">100%</output><input id="size-setting" type="range" min="70" max="150" value="100"></label>
+              <label class="range-option">Group spacing <output class="range-output" id="spacing-output">0 px</output><input id="spacing-setting" type="range" min="0" max="60" value="0"></label>
               <label class="range-option">Background <output class="range-output" id="opacity-output">88%</output><input id="opacity-setting" type="range" min="0" max="100" value="88"></label>
               <label class="select-option">OSD style<select id="background-setting"><option value="none">None</option><option value="soft" selected>Soft</option><option value="full">Full</option></select></label>
               <label class="color-option">GPU color<input type="color" data-color="gpu" value="#50f45d"></label>
@@ -275,8 +276,9 @@
 
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
-      <div class="osd-edit-hint">Drag to move · drag the corner to resize · Ctrl+Alt+E to lock</div>
+      <div class="osd-edit-hint">Drag to move · corner resizes · bottom edge spaces the groups · Ctrl+Alt+E to lock</div>
       <div class="osd-grip" aria-hidden="true"></div>
+      <div class="osd-grip-bottom" aria-hidden="true"></div>
       <section class="osd-group" data-group="gpu">
         <h2 class="osd-group-title"><span>GPU</span><span class="osd-device-name" data-field="gpuName" title="Detecting graphics device">Detecting graphics device</span></h2>
         <div class="osd-row" data-row="gpuTemp"><span class="osd-label">GPU Temp</span><span class="osd-value"><span data-field="gpuTemp">--</span><span class="osd-unit">C</span></span></div>
@@ -305,6 +307,24 @@
       </section>
     </div>
   </section>
+
+  <dialog class="file-picker" id="file-picker" aria-label="Choose a game executable">
+    <div class="picker-header"><strong>Choose a game executable</strong><button class="window-action" id="picker-close" type="button">Cancel</button></div>
+    <div class="picker-bar">
+      <button class="window-action" id="picker-home" type="button">This PC</button>
+      <button class="window-action" id="picker-up" type="button">Up</button>
+      <button class="window-action" id="picker-scan" type="button" title="Find a game in every subfolder of this folder">Add games in this folder</button>
+      <button class="window-action" id="picker-system" type="button" title="Use the Windows file dialog instead">System dialog</button>
+    </div>
+    <code class="picker-path" id="picker-path"></code>
+    <input class="picker-filter" id="picker-filter" type="text" placeholder="Filter this folder" aria-label="Filter this folder">
+    <ul class="picker-list" id="picker-list"></ul>
+    <div class="button-row" id="picker-scan-actions" hidden>
+      <button class="window-action primary" id="picker-scan-add" type="button">Add selected</button>
+      <button class="window-action" id="picker-scan-back" type="button">Back</button>
+    </div>
+    <p class="setting-note" id="picker-status" role="status"></p>
+  </dialog>
 
   <script src="renderer.js" defer></script>
 </body>
