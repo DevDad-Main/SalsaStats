@@ -464,3 +464,14 @@
     /* No gap above the first visible group; optional border */
     .osd-group.first, body.osd-minimal .osd-group.first { margin-top: 0; }
     body .osd-shell.no-border { border-color: transparent !important; }
+
+    /* Update progress inside the Updates card */
+    .update-progress { height: 8px; margin-top: 14px; overflow: hidden; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+    .update-progress-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--lime), var(--mint)); transition: width .4s ease; }
+
+    /* Aligned units so FPS lines up with the other numbers; keybind buttons */
+    .osd-unit { display: inline-block; min-width: 1.15em; text-align: left; }
+    .keybind-list li { gap: 14px; }
+    .keybind-button { display: inline-flex; flex: none; gap: 4px; align-items: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-size: 12px; cursor: pointer; }
+    .keybind-button:hover { border-color: var(--lime); }
+    .keybind-button kbd { border-width: 1px; }

@@ -1,67 +1,87 @@
+<div align="center">
+
 # SalsaStats
 
-A small Windows overlay that shows what your PC is doing while you play: GPU, CPU, memory and frame rate, in a panel that stays out of your way.
+**A clean, click-through performance overlay for Windows and GeForce NOW sessions.**
 
-I built it for GeForce NOW sessions (including setups made with tools like SalsaNOW), where all you normally see is the video stream. It runs inside the remote Windows session and reports what that machine is doing. It works on a normal gaming PC too.
+GPU, CPU, memory and frame rate, always on top, never in your way.
 
-SalsaStats is an independent project and isn't affiliated with NVIDIA or SalsaNOW.
+[![Latest release](https://img.shields.io/github/v/release/DevDad-Main/SalsaStats?style=flat-square&color=6ea8fe)](https://github.com/DevDad-Main/SalsaStats/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/DevDad-Main/SalsaStats/total?style=flat-square&color=3ddc97)](https://github.com/DevDad-Main/SalsaStats/releases)
+[![License](https://img.shields.io/github/license/DevDad-Main/SalsaStats?style=flat-square&color=8b98a9)](#license)
+
+[Download](https://github.com/DevDad-Main/SalsaStats/releases/latest) · [Keybinds](#keybinds) · [Frame rate](#frame-rate) · [Troubleshooting](#troubleshooting)
+
+</div>
+
+---
+
+In a cloud session all you normally see is the video stream. SalsaStats runs inside the remote Windows session and shows what that machine is really doing while you play. It works just as well on a normal gaming PC.
+
+It was built for GeForce NOW sessions, including setups made with tools like SalsaNOW. It is an independent project and isn't affiliated with NVIDIA or SalsaNOW.
+
+## Highlights
+
+- **Click-through overlay** that never takes focus, so it can't minimise your game
+- **Per-game layouts**: give each game its own name and overlay look, applied automatically while it runs
+- **Minimal view** with its own appearance, one keypress away
+- **Real frame rate** with average, 1% low and live graphs, raw or capped to your stream rate
+- **Everything is configurable**: readings, colours, size, spacing, border and keybinds
+- **Built-in log panel** and one-click updates
 
 ## Install
 
-1. Download the latest `SalsaStats-x.y.z-x64-Setup.exe` from [Releases](https://github.com/DevDad-Main/SalsaStats/releases/latest).
+1. Download `SalsaStats-x.y.z-x64-Setup.exe` from [Releases](https://github.com/DevDad-Main/SalsaStats/releases/latest).
 2. Run it. It installs for your user only and doesn't ask for administrator rights.
-3. SalsaStats updates itself from then on.
+3. SalsaStats keeps itself up to date from then on.
 
 The installer isn't code-signed, so Windows SmartScreen may warn you. Choose **More info**, then **Run anyway**.
 
-## Using it
+## Quick start
 
-Open the app and press **Overlay** to turn it into an always-on-top panel. The overlay ignores the mouse and never takes focus from your game, so you can leave it up without it getting in the way. Because of that, you control it with keys:
+Open the app and press **Overlay**. From then on you control it with the keyboard, because the overlay ignores the mouse.
 
-| Keys | What it does |
+### Keybinds
+
+| Default keys | Action |
 | --- | --- |
 | `Ctrl` `Alt` `O` | Open the dashboard and overlay settings |
 | `Ctrl` `Alt` `M` | Switch between the full and the minimal overlay |
 | `Ctrl` `Alt` `H` | Hide or show the overlay |
-| `Ctrl` `Alt` `E` | Unlock the overlay to drag it around and resize it from the corner, then press again to lock it in place |
-| `Ctrl` `` ` `` | Show or hide the log panel (in the dashboard) |
+| `Ctrl` `Alt` `E` | Unlock the overlay to move it and resize it from any corner, then lock it again |
 
-The dashboard has four tabs:
+Every one of these can be changed in **Settings → Keybinds**. In the dashboard, `Ctrl` `` ` `` toggles the log panel.
 
-- **Overview** shows live CPU, GPU and memory, a usage history and your frame rate.
-- **Games** is your library. Add a game by picking its `.exe`, or press **Add running game** while it's open. Each game gets a proper name and can have its own overlay layout, which switches on automatically while that game runs.
-- **Overlay** lets you choose which readings appear, set colours, size and screen corner, and pick what the minimal view shows. Use the **Layout for** menu to edit the default layout or a single game's.
-- **Settings** has the update check, FPS mode, window behaviour and the log folder.
+### The dashboard
 
-## What it shows
+| Tab | What it's for |
+| --- | --- |
+| **Overview** | Live CPU, GPU and memory, usage history and frame rate |
+| **Games** | Your library. Add a game by its `.exe`, add a whole folder at once, or press **Add running game** |
+| **Overlay** | Choose readings, colours, size, spacing and border, and design the minimal view separately |
+| **Settings** | Updates, keybinds, frame rate mode, window behaviour and the log folder |
 
-- **GPU:** usage, temperature, clock and VRAM
-- **CPU:** usage, clock and temperature where Windows exposes them
-- **Memory:** RAM in use
-- **Frame rate:** current FPS, average and 1% low, with live graphs, for whichever game is running
-
-Readings the machine doesn't provide are hidden automatically. Power draw isn't shown at all, because cloud sessions don't expose it.
+In the **Overlay** tab, the **Layout for** menu switches between the default layout and any game in your library.
 
 ## Frame rate
 
-SalsaStats measures frames the game presents on the machine it runs on, using [PresentMon](https://github.com/GameTechDev/PresentMon). That is the real render rate. In a cloud session it can be well above the rate of the stream you see.
+SalsaStats reads the frames a game presents on the machine it runs on, using [PresentMon](https://github.com/GameTechDev/PresentMon). That is the true render rate, which in a cloud session can be well above the rate of the stream you see.
 
-You can switch in **Settings → Frame rate**:
+In **Settings → Frame rate** you can choose:
 
-- **Raw render FPS** is what the game actually renders.
-- **Capped to stream rate** limits the numbers to your stream rate (30 to 240) to roughly match what GeForce NOW shows. SalsaStats can't read the real stream rate, so you set the cap yourself.
+- **Raw render FPS**, exactly what the game renders
+- **Capped to stream rate** (30 to 240), to roughly match what GeForce NOW shows. The real stream rate can't be read, so you set the cap yourself.
 
-Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Without that, everything else still works. The status bar tells you when capture is unavailable.
+Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Everything else works without it, and the status bar tells you when capture is unavailable.
 
-The game name comes from its window title. For a name you prefer, add the game to your library on the **Games** tab and rename it there.
+## Troubleshooting
 
-## If something looks off
+- **A game minimises or loses focus.** Turn off **Force above fullscreen games** in Settings.
+- **GPU temperature or clock is missing.** Open the log panel from the **Logs** button and check the startup line to see which hardware sources responded.
+- **The overlay hides behind a game.** Exclusive-fullscreen games can cover any overlay. Use borderless or windowed mode.
+- **A game isn't recognised.** Games are matched by executable name, ignoring suffixes like `-Win64-Shipping`. Use **Add running game** for an exact match.
 
-- **A game minimises or loses focus:** turn off **Force above fullscreen games** in Settings.
-- **GPU temperature or clock is missing:** open the log panel with the **Logs** button and check the startup line. It lists which hardware sources responded.
-- **The overlay is hidden behind a game:** exclusive-fullscreen games can cover any overlay. Use borderless or windowed mode.
-
-The log panel has filter, copy, pause and clear buttons, so it's easy to paste into a bug report. Logs are stored in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
+The log panel has filter, copy, pause and clear buttons, which makes it easy to paste into a bug report. Logs live in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
 
 ## Build it yourself
 
@@ -77,10 +97,7 @@ The build downloads PresentMon and compiles a small helper that reads NVIDIA sen
 
 ## Credits
 
-- [PresentMon](https://github.com/GameTechDev/PresentMon) by Intel for frame timing
-- [NvAPIWrapper](https://github.com/falahati/NvAPIWrapper) for NVIDIA sensor readings
-- [systeminformation](https://github.com/sebhildebrandt/systeminformation) for CPU and GPU details
-- [Electron](https://www.electronjs.org/)
+[PresentMon](https://github.com/GameTechDev/PresentMon) by Intel for frame timing · [NvAPIWrapper](https://github.com/falahati/NvAPIWrapper) for NVIDIA sensors · [systeminformation](https://github.com/sebhildebrandt/systeminformation) for CPU and GPU details · [Electron](https://www.electronjs.org/)
 
 ## License
 

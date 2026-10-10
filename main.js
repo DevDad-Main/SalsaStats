@@ -740,18 +740,85 @@ app.on('child-process-gone', (_event, details) => {
   if (!isQuitting) logger.writeSync('error', 'An Electron child process exited.', details);
 });
 
-const SHORTCUTS = {
+const DEFAULT_SHORTCUTS = {
   customize: 'CommandOrControl+Alt+O',
   minimal: 'CommandOrControl+Alt+M',
   toggle: 'CommandOrControl+Alt+H',
   edit: 'CommandOrControl+Alt+E',
 };
+let shortcuts = { ...DEFAULT_SHORTCUTS };
+let shortcutHandlers = {};
+
+function keybindsPath() {
+  return path.join(app.getPath('userData'), 'settings', 'keybinds.json');
+}
+
+function loadShortcuts() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(keybindsPath(), 'utf8'));
+    Object.keys(DEFAULT_SHORTCUTS).forEach(action => {
+      if (typeof saved[action] === 'string' && /^[A-Za-z0-9+]{1,40}$/.test(saved[action])) shortcuts[action] = saved[action];
+    });
+  } catch {
+    // No saved keybinds; the defaults apply.
+  }
+}
+
+function saveShortcuts() {
+  try {
+    fs.mkdirSync(path.dirname(keybindsPath()), { recursive: true });
+    fs.writeFileSync(keybindsPath(), JSON.stringify(shortcuts));
+  } catch (error) {
+    logger.writeSync('warn', 'Unable to save keybinds.', error);
+  }
+}
+
+function registerShortcut(action) {
+  try {
+    return globalShortcut.register(shortcuts[action], shortcutHandlers[action]);
+  } catch (error) {
+    logger.writeSync('warn', 'Unable to register a keybind.', { action, message: error.message });
+    return false;
+  }
+}
+
+function registerKeybindHandlers() {
+  ipcMain.handle('keybinds:get', event => (isTrustedRenderer(event) ? { shortcuts, defaults: DEFAULT_SHORTCUTS } : null));
+
+  ipcMain.handle('keybinds:set', (event, action, accelerator) => {
+    if (!isTrustedRenderer(event)) return { ok: false, error: 'Request not allowed.' };
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_SHORTCUTS, action) || !/^[A-Za-z0-9+]{1,40}$/.test(String(accelerator))) {
+      return { ok: false, error: 'That key combination is not valid.' };
+    }
+    const taken = Object.entries(shortcuts).find(([other, value]) => other !== action && value.toLowerCase() === accelerator.toLowerCase());
+    if (taken) return { ok: false, error: 'Another SalsaStats keybind already uses that combination.' };
+    const previous = shortcuts[action];
+    globalShortcut.unregister(previous);
+    shortcuts[action] = accelerator;
+    if (!registerShortcut(action)) {
+      shortcuts[action] = previous;
+      registerShortcut(action);
+      return { ok: false, error: 'That combination is unavailable. Another app may be using it.' };
+    }
+    saveShortcuts();
+    return { ok: true, shortcuts };
+  });
+
+  ipcMain.handle('keybinds:reset', event => {
+    if (!isTrustedRenderer(event)) return null;
+    globalShortcut.unregisterAll();
+    shortcuts = { ...DEFAULT_SHORTCUTS };
+    Object.keys(shortcuts).forEach(registerShortcut);
+    saveShortcuts();
+    return { ok: true, shortcuts };
+  });
+}
 
 function registerShortcuts() {
   const send = action => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shortcut', action);
   };
-  const handlers = {
+  shortcutHandlers = {
     customize: () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       if (!mainWindow.isVisible()) mainWindow.show();
@@ -780,14 +847,9 @@ function registerShortcuts() {
       else mainWindow.show();
     },
   };
-  Object.entries(SHORTCUTS).forEach(([action, accelerator]) => {
-    let registered = false;
-    try {
-      registered = globalShortcut.register(accelerator, handlers[action]);
-    } catch (error) {
-      logger.writeSync('warn', 'Unable to register a keybind.', { accelerator, message: error.message });
-    }
-    if (!registered) logger.writeSync('warn', 'Keybind is unavailable.', { action, accelerator });
+  loadShortcuts();
+  Object.keys(shortcuts).forEach(action => {
+    if (!registerShortcut(action)) logger.writeSync('warn', 'Keybind is unavailable.', { action, accelerator: shortcuts[action] });
   });
 }
 
@@ -805,6 +867,7 @@ app.whenReady().then(() => {
   createWindow();
   overlayCustomPosition = loadOverlayPosition();
   registerShortcuts();
+  registerKeybindHandlers();
   sampleStats();
 
   app.on('activate', () => {

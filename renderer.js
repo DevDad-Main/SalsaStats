@@ -51,6 +51,7 @@
       games: [],
       minimal: false,
       minimalRows: { fpsCurrent: true, gpuUsage: true, gpuTemp: true, cpuUsage: true },
+      minimalLook: { scale: 100, size: 100, spacing: 0, opacity: 88, backgroundMode: 'soft', border: true },
       hideUnavailable: true,
     };
 
@@ -67,6 +68,7 @@
           colors: { ...defaultSettings.colors, ...saved.colors },
           games: Array.isArray(saved.games) ? saved.games : [],
           minimalRows: { ...defaultSettings.minimalRows, ...saved.minimalRows },
+          minimalLook: { ...defaultSettings.minimalLook, ...saved.minimalLook },
         };
       }
     } catch (error) {
@@ -75,7 +77,7 @@
     delete settings.gameNames;
 
     // A profile is the part of the overlay look a game can override.
-    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'spacing', 'border', 'opacity', 'backgroundMode', 'minimal', 'minimalRows'];
+    const PROFILE_KEYS = ['visible', 'colors', 'scale', 'size', 'spacing', 'border', 'opacity', 'backgroundMode', 'minimal', 'minimalRows', 'minimalLook'];
     function copyProfile(source) {
       return JSON.parse(JSON.stringify(Object.fromEntries(PROFILE_KEYS.map(key => [key, source[key]]))));
     }
@@ -86,6 +88,7 @@
         visible: { ...defaultSettings.visible, ...profile.visible },
         colors: { ...defaultSettings.colors, ...profile.colors },
         minimalRows: { ...defaultSettings.minimalRows, ...profile.minimalRows },
+        minimalLook: { ...defaultSettings.minimalLook, ...profile.minimalLook },
       };
     }
     function newGameId() {
@@ -115,6 +118,9 @@
       return key || lower;
     }
     const matchGame = exe => settings.games.find(game => exeKey(game.exe) === exeKey(exe)) || null;
+    // The minimal view has its own look so tuning it never changes the detailed overlay.
+    const lookOf = profile => (profile.minimal ? { ...profile, ...profile.minimalLook } : profile);
+    const lookTarget = profile => (profile.minimal ? profile.minimalLook : profile);
     function editTarget() {
       const game = findGame(editingId);
       return game && game.profile ? game.profile : settings;
@@ -138,16 +144,17 @@
       // P drives what the overlay looks like now; E is the profile shown in the editing controls.
       const P = appliedProfile();
       const E = editTarget();
+      const L = lookOf(P);
       const root = document.documentElement;
-      root.style.setProperty('--osd-scale', P.scale / 100);
-      root.style.setProperty('--osd-spacing', `${P.spacing || 0}px`);
-      const effectiveOpacity = P.backgroundMode === 'none' ? 0 : P.opacity / 100;
+      root.style.setProperty('--osd-scale', L.scale / 100);
+      root.style.setProperty('--osd-spacing', `${L.spacing || 0}px`);
+      const effectiveOpacity = L.backgroundMode === 'none' ? 0 : L.opacity / 100;
       root.style.setProperty('--osd-opacity', effectiveOpacity);
       document.querySelectorAll('.osd-shell').forEach(shell => {
-        shell.classList.toggle('background-none', P.backgroundMode === 'none');
-        shell.classList.toggle('background-soft', P.backgroundMode === 'soft');
-        shell.classList.toggle('background-full', P.backgroundMode === 'full');
-        shell.classList.toggle('no-border', P.border === false);
+        shell.classList.toggle('background-none', L.backgroundMode === 'none');
+        shell.classList.toggle('background-soft', L.backgroundMode === 'soft');
+        shell.classList.toggle('background-full', L.backgroundMode === 'full');
+        shell.classList.toggle('no-border', L.border === false);
       });
       Object.entries(P.colors).forEach(([name, color]) => {
         root.style.setProperty(`--${name}-color`, color);
@@ -205,6 +212,15 @@
       document.getElementById('opacity-output').textContent = `${E.opacity}%`;
       document.getElementById('background-setting').value = E.backgroundMode;
       document.getElementById('border-setting').checked = E.border !== false;
+      document.querySelectorAll('[data-min]').forEach(input => {
+        const value = E.minimalLook[input.dataset.min];
+        if (input.type === 'checkbox') input.checked = value !== false;
+        else input.value = value;
+      });
+      document.querySelectorAll('[data-min-output]').forEach(output => {
+        const key = output.dataset.minOutput;
+        output.textContent = key === 'spacing' ? `${E.minimalLook[key]} px` : `${E.minimalLook[key]}%`;
+      });
       document.getElementById('anchor-setting').value = settings.anchor;
       document.getElementById('overlay-above-games').checked = settings.overlayAboveGames === true;
       document.getElementById('fps-mode').value = settings.fpsMode;
@@ -242,6 +258,18 @@
       editTarget().opacity = Number(event.target.value);
       saveSettings();
       applySettings();
+    });
+    document.querySelectorAll('[data-min]').forEach(input => {
+      input.addEventListener(input.type === 'range' ? 'input' : 'change', () => {
+        const target = editTarget().minimalLook;
+        const key = input.dataset.min;
+        if (input.type === 'checkbox') target[key] = input.checked;
+        else if (input.type === 'range') target[key] = Number(input.value);
+        else target[key] = input.value;
+        saveSettings();
+        applySettings();
+        if (document.body.classList.contains('overlay')) statsApi.setScale(lookOf(appliedProfile()).size);
+      });
     });
     document.getElementById('border-setting').addEventListener('change', event => {
       editTarget().border = event.target.checked;
@@ -687,7 +715,7 @@
       if (matchedId !== activeGameId) {
         activeGameId = matchedId;
         applySettings();
-        if (document.body.classList.contains('overlay')) statsApi.setScale(appliedProfile().size);
+        if (document.body.classList.contains('overlay')) statsApi.setScale(lookOf(appliedProfile()).size);
       }
       const fps = raw && {
         ...raw,
@@ -864,7 +892,7 @@
         event.preventDefault();
         grip.setPointerCapture(event.pointerId);
         const startX = event.screenX;
-        const profile = appliedProfile();
+        const profile = lookTarget(appliedProfile());
         const startSize = profile.size;
         const start = { left: window.screenX, top: window.screenY, width: window.outerWidth, height: window.outerHeight };
         const westward = corner.includes('w');
@@ -900,7 +928,7 @@
       event.preventDefault();
       osdGripBottom.setPointerCapture(event.pointerId);
       const startY = event.screenY;
-      const profile = appliedProfile();
+      const profile = lookTarget(appliedProfile());
       const startSpacing = profile.spacing || 0;
       const gaps = Math.max(1, osdPanel.querySelectorAll('.osd-group:not([hidden])').length - 1);
       const move = moveEvent => {
@@ -938,7 +966,7 @@
       lastFitHeight = 0;
       if (mode === 'overlay') {
         statsApi.setAnchor(settings.anchor);
-        statsApi.setScale(appliedProfile().size);
+        statsApi.setScale(lookOf(appliedProfile()).size);
         requestAnimationFrame(fitOverlayHeight);
       }
       requestAnimationFrame(() => {
@@ -1102,8 +1130,20 @@
       }
     }
 
+    let manualUpdate = false;
+
+    function renderUpdateCard(state) {
+      const status = state?.status;
+      const percent = status === 'downloaded' ? 100 : (status === 'downloading' ? state.percent || 0 : 0);
+      document.getElementById('update-progress').hidden = !['available', 'downloading', 'downloaded'].includes(status);
+      document.getElementById('update-progress-fill').style.width = `${percent}%`;
+      document.getElementById('update-card-install').hidden = status !== 'downloaded';
+      document.getElementById('check-updates').hidden = status === 'downloaded';
+    }
+
     function renderUpdateState(state) {
       document.getElementById('update-status').textContent = updateStatusText(state);
+      renderUpdateCard(state);
       if (!state || ['idle', 'checking', 'current', 'dev'].includes(state.status)) {
         updateBanner.hidden = true;
         return;
@@ -1114,12 +1154,14 @@
       else if (state.status === 'downloading') updateMessage.textContent = `Downloading SalsaStats ${state.version || 'update'}: ${state.percent || 0}%.`;
       else if (state.status === 'downloaded') updateMessage.textContent = `SalsaStats ${state.version} is ready to install.`;
       else updateMessage.textContent = 'Could not check for updates. SalsaStats will try again later.';
-      updateBanner.hidden = false;
+      // A check started from the Updates card reports there instead of in the banner.
+      updateBanner.hidden = manualUpdate;
     }
 
     const unsubscribeUpdates = statsApi.onUpdateState?.(renderUpdateState);
     statsApi.getUpdateState?.().then(renderUpdateState).catch(() => {});
     updateInstall.addEventListener('click', () => statsApi.installUpdate?.());
+    document.getElementById('update-card-install').addEventListener('click', () => statsApi.installUpdate?.());
     statsApi.getVersion?.().then(version => {
       if (!version) return;
       document.getElementById('app-version').textContent = `SalsaStats v${version}`;
@@ -1127,6 +1169,8 @@
     }).catch(() => {});
     document.getElementById('check-updates').addEventListener('click', async event => {
       const button = event.currentTarget;
+      manualUpdate = true;
+      updateBanner.hidden = true;
       button.disabled = true;
       button.textContent = 'Checking...';
       document.getElementById('update-status').textContent = updateStatusText({ status: 'checking' });
@@ -1213,6 +1257,76 @@
         profile.minimal = !profile.minimal;
         saveSettings();
         applySettings();
+        statsApi.setScale(lookOf(profile).size);
+      }
+    });
+
+    const KEYBIND_LABELS = {
+      customize: 'Open the dashboard and overlay settings',
+      minimal: 'Switch the overlay between full and minimal',
+      toggle: 'Hide or show the overlay',
+      edit: 'Unlock the overlay to move and resize it',
+    };
+    const keybindStatus = document.getElementById('keybind-status');
+
+    function acceleratorFromEvent(event) {
+      let key = null;
+      if (/^Key[A-Z]$/.test(event.code)) key = event.code.slice(3);
+      else if (/^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
+      else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(event.code)) key = event.code;
+      if (!key) return null;
+      const modifiers = [event.ctrlKey && 'CommandOrControl', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
+      if (!modifiers.length && !key.startsWith('F')) return null;
+      return [...modifiers, key].join('+');
+    }
+
+    function renderKeybinds(shortcuts) {
+      const list = document.getElementById('keybind-list');
+      list.textContent = '';
+      Object.entries(KEYBIND_LABELS).forEach(([action, label]) => {
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'keybind-button';
+        button.title = 'Click, then press the new key combination';
+        String(shortcuts[action]).replace('CommandOrControl', 'Ctrl').split('+').forEach(part => {
+          const key = document.createElement('kbd');
+          key.textContent = part;
+          button.append(key);
+        });
+        const text = document.createElement('span');
+        text.textContent = label;
+        button.addEventListener('click', () => {
+          button.textContent = 'Press the new keys (Esc to cancel)';
+          keybindStatus.textContent = '';
+          const capture = async event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === 'Escape') {
+              window.removeEventListener('keydown', capture, true);
+              renderKeybinds(shortcuts);
+              return;
+            }
+            const accelerator = acceleratorFromEvent(event);
+            if (!accelerator) return;
+            window.removeEventListener('keydown', capture, true);
+            const result = await statsApi.setKeybind(action, accelerator).catch(() => ({ ok: false, error: 'Could not save the keybind.' }));
+            keybindStatus.textContent = result.ok ? 'Keybind saved.' : result.error;
+            renderKeybinds(result.ok ? result.shortcuts : shortcuts);
+          };
+          window.addEventListener('keydown', capture, true);
+        });
+        item.append(button, text);
+        list.append(item);
+      });
+    }
+
+    statsApi.getKeybinds?.().then(data => data && renderKeybinds(data.shortcuts)).catch(() => {});
+    document.getElementById('keybind-reset').addEventListener('click', async () => {
+      const result = await statsApi.resetKeybinds().catch(() => null);
+      if (result?.ok) {
+        renderKeybinds(result.shortcuts);
+        keybindStatus.textContent = 'Keybinds reset to the defaults.';
       }
     });
 

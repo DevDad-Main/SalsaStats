@@ -171,6 +171,18 @@
             <label class="check-option extra"><input id="hide-unavailable" type="checkbox">Hide readings that are unavailable</label>
           </section>
           <section class="settings-group">
+            <h3>Minimal appearance</h3>
+            <p class="setting-note">How the minimal view looks. These are separate from the detailed overlay below.</p>
+            <div class="appearance-options">
+              <label class="range-option">Text size <output data-min-output="scale">100%</output><input data-min="scale" type="range" min="80" max="140" value="100"></label>
+              <label class="range-option">Panel size <output data-min-output="size">100%</output><input data-min="size" type="range" min="70" max="150" value="100"></label>
+              <label class="range-option">Group spacing <output data-min-output="spacing">0 px</output><input data-min="spacing" type="range" min="0" max="60" value="0"></label>
+              <label class="range-option">Background <output data-min-output="opacity">88%</output><input data-min="opacity" type="range" min="0" max="100" value="88"></label>
+              <label class="select-option">Style<select data-min="backgroundMode"><option value="none">None</option><option value="soft">Soft</option><option value="full">Full</option></select></label>
+              <label class="check-option"><input data-min="border" type="checkbox">Show border</label>
+            </div>
+          </section>
+          <section class="settings-group">
             <h3>Appearance</h3>
             <div class="appearance-options">
               <label class="range-option">Text size <output class="range-output" id="scale-output">100%</output><input id="scale-setting" type="range" min="80" max="140" value="100"></label>
@@ -207,18 +219,16 @@
               <div class="setting-note" id="update-status" role="status" aria-live="polite">Updates are checked on launch and every six hours.</div>
             </div>
             <button class="window-action primary" id="check-updates" type="button">Check for updates</button>
+            <button class="window-action primary" id="update-card-install" type="button" hidden>Restart to update</button>
           </div>
+          <div class="update-progress" id="update-progress" role="progressbar" aria-label="Update download progress" hidden><div class="update-progress-fill" id="update-progress-fill"></div></div>
         </section>
         <section class="settings-group">
           <h3>Keybinds</h3>
-          <p class="setting-note">The overlay ignores the mouse, so use these while playing.</p>
-          <ul class="keybind-list">
-            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>O</kbd><span>Open the dashboard and overlay settings</span></li>
-            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd><span>Switch the overlay to the minimal view and back</span></li>
-            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>H</kbd><span>Hide or show the overlay</span></li>
-            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>E</kbd><span>Unlock the overlay to move and resize it, press again to lock</span></li>
-            <li><kbd>Ctrl</kbd> + <kbd>`</kbd><span>Show or hide the log panel (dashboard)</span></li>
-          </ul>
+          <p class="setting-note">The overlay ignores the mouse, so use these while playing. Click a key combination to change it.</p>
+          <ul class="keybind-list" id="keybind-list"></ul>
+          <div class="button-row"><button class="window-action" id="keybind-reset" type="button">Reset to defaults</button></div>
+          <p class="setting-note" id="keybind-status" role="status" aria-live="polite"></p>
         </section>
         <section class="settings-group">
           <h3>Frame rate</h3>
@@ -302,9 +312,9 @@
       </section>
       <section class="osd-group" data-group="fps">
         <h2 class="osd-group-title">FRAMERATE</h2>
-        <div class="osd-row" data-row="fpsCurrent"><span class="osd-label">FPS</span><span class="osd-value" data-field="fpsCurrent">--</span></div>
-        <div class="osd-row" data-row="fpsAverage"><span class="osd-label">AVG</span><span class="osd-value" data-field="fpsAverage">--</span></div>
-        <div class="osd-row" data-row="fpsLow"><span class="osd-label">1% Low</span><span class="osd-value" data-field="fpsLow">--</span></div>
+        <div class="osd-row" data-row="fpsCurrent"><span class="osd-label">FPS</span><span class="osd-value"><span data-field="fpsCurrent">--</span><span class="osd-unit"></span></span></div>
+        <div class="osd-row" data-row="fpsAverage"><span class="osd-label">AVG</span><span class="osd-value"><span data-field="fpsAverage">--</span><span class="osd-unit"></span></span></div>
+        <div class="osd-row" data-row="fpsLow"><span class="osd-label">1% Low</span><span class="osd-value"><span data-field="fpsLow">--</span><span class="osd-unit"></span></span></div>
         <p class="osd-note" data-row="fpsNote">Game capture unavailable</p>
         <div class="osd-chart-block" data-row="graphRate"><div class="osd-chart-heading"><span>Framerate</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="rate"></canvas></div>
         <div class="osd-chart-block" data-row="graphTime"><div class="osd-chart-heading"><span>Frametime</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="time"></canvas></div>

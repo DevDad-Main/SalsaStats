@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('salsaStats', {
   checkForUpdates: () => ipcRenderer.invoke('updates:check'),
   getVersion: () => ipcRenderer.invoke('app:get-version'),
   browseGame: () => ipcRenderer.invoke('games:browse'),
+  getKeybinds: () => ipcRenderer.invoke('keybinds:get'),
+  setKeybind: (action, accelerator) => ipcRenderer.invoke('keybinds:set', action, accelerator),
+  resetKeybinds: () => ipcRenderer.invoke('keybinds:reset'),
   listDirectory: directory => ipcRenderer.invoke('fs:list', directory),
   scanGames: directory => ipcRenderer.invoke('fs:scan', directory),
   onShortcut: callback => {
