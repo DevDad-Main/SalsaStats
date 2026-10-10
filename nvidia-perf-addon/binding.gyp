@@ -19,7 +19,7 @@
         }
       },
       "conditions": [
-        [ "OS=="win", {
+        [ "OS=='win'", {
           "link_settings": {
             "libraries": [ "nvapi64.lib", "version.lib" ]
           }
