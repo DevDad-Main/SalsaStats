@@ -4,7 +4,7 @@
       "target_name": "nvidia_perf",
       "sources": [ "nvidia_perf.cc" ],
       "include_dirs": [
-        "<!(node -e \"require('node-addon-api').include\")",
+        "<!@(node -p \"require('node-addon-api').include\")",
         "include"
       ],
       "libraries": [
