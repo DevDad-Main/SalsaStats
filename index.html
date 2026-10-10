@@ -111,7 +111,6 @@
               <label class="check-option"><input type="checkbox" data-setting="gpuUsage">Usage</label>
               <label class="check-option"><input type="checkbox" data-setting="gpuVram">VRAM</label>
               <label class="check-option"><input type="checkbox" data-setting="gpuClock">Core clock</label>
-              <label class="check-option"><input type="checkbox" data-setting="gpuPower">Power</label>
             </div>
           </section>
           <section class="settings-group">
@@ -120,7 +119,6 @@
               <label class="check-option"><input type="checkbox" data-setting="cpuTemp">Temperature</label>
               <label class="check-option"><input type="checkbox" data-setting="cpuUsage">Usage</label>
               <label class="check-option"><input type="checkbox" data-setting="cpuClock">Clock</label>
-              <label class="check-option"><input type="checkbox" data-setting="cpuPower">Power</label>
             </div>
           </section>
           <section class="settings-group">
@@ -185,6 +183,7 @@
             <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>O</kbd><span>Open the dashboard and overlay settings</span></li>
             <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd><span>Switch the overlay to the minimal view and back</span></li>
             <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>H</kbd><span>Hide or show the overlay</span></li>
+            <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>E</kbd><span>Unlock the overlay to move and resize it, press again to lock</span></li>
             <li><kbd>Ctrl</kbd> + <kbd>`</kbd><span>Show or hide the log panel (dashboard)</span></li>
           </ul>
         </section>
@@ -254,20 +253,20 @@
 
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
+      <div class="osd-edit-hint">Drag to move · drag the corner to resize · Ctrl+Alt+E to lock</div>
+      <div class="osd-grip" aria-hidden="true"></div>
       <section class="osd-group" data-group="gpu">
         <h2 class="osd-group-title"><span>GPU</span><span class="osd-device-name" data-field="gpuName" title="Detecting graphics device">Detecting graphics device</span></h2>
         <div class="osd-row" data-row="gpuTemp"><span class="osd-label">GPU Temp</span><span class="osd-value"><span data-field="gpuTemp">--</span><span class="osd-unit">C</span></span></div>
         <div class="osd-row" data-row="gpuUsage"><span class="osd-label">GPU Usage</span><span class="osd-value"><span data-field="gpuUsage">--</span><span class="osd-unit">%</span></span></div>
         <div class="osd-row" data-row="gpuVram"><span class="osd-label">GPU VRAM</span><span class="osd-value" data-field="gpuVram">--</span></div>
         <div class="osd-row" data-row="gpuClock"><span class="osd-label">GPU Clock</span><span class="osd-value" data-field="gpuClock">--</span></div>
-        <div class="osd-row" data-row="gpuPower"><span class="osd-label">GPU Power</span><span class="osd-value" data-field="gpuPower">--</span></div>
       </section>
       <section class="osd-group" data-group="cpu">
         <h2 class="osd-group-title"><span>CPU</span><span class="osd-device-name" data-field="cpuName" title="Detecting processor">Detecting processor</span></h2>
         <div class="osd-row" data-row="cpuTemp"><span class="osd-label">CPU Temp</span><span class="osd-value"><span data-field="cpuTemp">--</span><span class="osd-unit">C</span></span></div>
         <div class="osd-row" data-row="cpuUsage"><span class="osd-label">CPU Usage</span><span class="osd-value"><span data-field="cpuUsage">--</span><span class="osd-unit">%</span></span></div>
         <div class="osd-row" data-row="cpuClock"><span class="osd-label">CPU Clock</span><span class="osd-value" data-field="cpuClock">--</span></div>
-        <div class="osd-row" data-row="cpuPower"><span class="osd-label">CPU Power</span><span class="osd-value" data-field="cpuPower">--</span></div>
       </section>
       <section class="osd-group" data-group="memory">
         <h2 class="osd-group-title">MEMORY</h2>

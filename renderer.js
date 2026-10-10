@@ -33,8 +33,8 @@
     const maxSamples = 48;
     const defaultSettings = {
       visible: {
-        gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true, gpuPower: true,
-        cpuTemp: true, cpuUsage: true, cpuClock: true, cpuPower: true, memoryUsage: true,
+        gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true,
+        cpuTemp: true, cpuUsage: true, cpuClock: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
@@ -180,7 +180,7 @@
       settings.anchor = event.target.value;
       saveSettings();
       applySettings();
-      statsApi.setAnchor(settings.anchor);
+      statsApi.setAnchor(settings.anchor, true);
     });
     document.getElementById('overlay-above-games').addEventListener('change', event => {
       settings.overlayAboveGames = event.target.checked;
@@ -428,21 +428,17 @@
           : `${Math.round(stats.gpu.memoryUsed)} MiB used`
         : 'Unavailable');
       setField('gpuClock', stats.gpu.clock === null ? 'Unavailable' : `${stats.gpu.clock} MHz`);
-      setField('gpuPower', stats.gpu.power === null ? 'Unavailable' : `${stats.gpu.power.toFixed(1)} W`);
       setField('cpuTemp', stats.cpu.temperature === null ? '--' : stats.cpu.temperature);
       setField('cpuUsage', stats.cpu.usage);
       setField('cpuClock', stats.cpu.clock === null ? 'Unavailable' : `${stats.cpu.clock} MHz`);
-      setField('cpuPower', 'Unavailable');
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
       const unavailable = {
         gpuTemp: stats.gpu.temperature === null,
         gpuClock: stats.gpu.clock === null,
-        gpuPower: stats.gpu.power === null,
         gpuVram: !Number.isFinite(stats.gpu.memoryUsed),
         cpuTemp: stats.cpu.temperature === null,
         cpuClock: stats.cpu.clock === null,
-        cpuPower: true,
       };
       Object.entries(unavailable).forEach(([row, isUnavailable]) => {
         document.querySelectorAll(`[data-row="${row}"]`).forEach(element => element.classList.toggle('unavailable', isUnavailable));
@@ -463,6 +459,7 @@
     osdPanel.addEventListener('pointerdown', event => {
       if (!document.body.classList.contains('overlay')) return;
       if (event.target.closest('button')) return;
+      if (event.target.closest('.osd-grip')) return;
       const shell = event.target.closest('.osd-shell');
       if (!shell) return;
       const { screenX, screenY } = event;
@@ -485,9 +482,33 @@
       dragState = null;
     });
 
+    // Dragging the corner grip resizes the overlay (edit mode only, when it accepts the mouse).
+    const osdGrip = osdPanel.querySelector('.osd-grip');
+    osdGrip.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      osdGrip.setPointerCapture(event.pointerId);
+      const startX = event.screenX;
+      const startSize = settings.size;
+      const move = moveEvent => {
+        const size = Math.max(70, Math.min(150, Math.round(startSize + (moveEvent.screenX - startX) / 3.4)));
+        settings.size = size;
+        settings.scale = Math.max(80, Math.min(140, size));
+        applySettings();
+        statsApi.setScale(settings.size);
+      };
+      const finish = () => {
+        osdGrip.removeEventListener('pointermove', move);
+        osdGrip.removeEventListener('pointerup', finish);
+        saveSettings();
+      };
+      osdGrip.addEventListener('pointermove', move);
+      osdGrip.addEventListener('pointerup', finish);
+    });
+
     function setMode(mode) {
       document.body.classList.toggle('compact', mode === 'compact');
       document.body.classList.toggle('overlay', mode === 'overlay');
+      if (mode !== 'overlay') document.body.classList.remove('osd-editing');
       modeToggle.textContent = mode === 'compact' ? 'Full view' : 'Compact view';
       modeToggle.title = mode === 'compact' ? 'Switch to full view' : 'Switch to compact view';
       overlayToggle.setAttribute('aria-pressed', String(mode === 'overlay'));
@@ -727,6 +748,8 @@
       applySettings();
     });
     statsApi.onShortcut?.(action => {
+      if (action === 'edit-on') document.body.classList.add('osd-editing');
+      if (action === 'edit-off') document.body.classList.remove('osd-editing');
       if (action === 'customize') openSettings();
       if (action === 'minimal') {
         settings.minimal = !settings.minimal;

@@ -352,3 +352,24 @@
     body.osd-minimal .osd-shell { align-self: flex-start; }
     body.osd-minimal.anchor-right .osd-shell { align-self: flex-end; }
     body.osd-minimal.anchor-bottom .osd-shell { margin-top: auto; }
+
+    /* Overlay edit mode */
+    .osd-shell { position: relative; }
+    .osd-edit-hint, .osd-grip { display: none; }
+    .preview-osd .osd-edit-hint, .preview-osd .osd-grip { display: none !important; }
+    body.osd-editing .osd-shell { outline: 2px dashed var(--lime); outline-offset: -2px; cursor: move; -webkit-app-region: no-drag; }
+    body.osd-editing .osd-edit-hint { display: block; margin-bottom: 4px; padding: 3px 6px; border-radius: 3px; color: #0d1117; background: var(--lime); font-size: calc(9px * var(--osd-scale)); font-weight: 600; text-align: center; }
+    body.osd-editing .osd-grip { display: block; position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--lime) 50%); }
+
+    /* Responsive settings cards */
+    .settings-controls { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .settings-controls.single { grid-template-columns: minmax(0, 560px); }
+    .settings-options { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+    .appearance-options { grid-template-columns: 1fr; gap: 14px; }
+    .appearance-options > * { min-width: 0; }
+    .range-option { grid-template-columns: minmax(0, 1fr) auto; }
+    .range-option input[type="range"] { grid-column: 1 / -1; width: 100%; min-width: 0; }
+    .select-option, .color-option { flex-wrap: wrap; }
+    .select-option select { max-width: 100%; min-width: 0; }
+    .settings-group { min-width: 0; overflow: hidden; }
+    @media (min-width: 1000px) { .appearance-options { grid-template-columns: 1fr 1fr; } }

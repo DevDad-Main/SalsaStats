@@ -14,7 +14,7 @@ const channels = {
 
 contextBridge.exposeInMainWorld('salsaStats', {
   setMode: mode => ipcRenderer.send(channels.setMode, mode),
-  setAnchor: anchor => ipcRenderer.send(channels.setAnchor, anchor),
+  setAnchor: (anchor, reset = false) => ipcRenderer.send(channels.setAnchor, anchor, reset),
   setOverlayAboveGames: enabled => ipcRenderer.send(channels.setOverlayAboveGames, enabled),
   setScale: scale => ipcRenderer.send(channels.setScale, scale),
   moveWindow: point => ipcRenderer.send(channels.moveWindow, point),

@@ -23,6 +23,7 @@ Open the app and press **Overlay** to turn it into an always-on-top panel. The o
 | `Ctrl` `Alt` `O` | Open the dashboard and overlay settings |
 | `Ctrl` `Alt` `M` | Switch between the full and the minimal overlay |
 | `Ctrl` `Alt` `H` | Hide or show the overlay |
+| `Ctrl` `Alt` `E` | Unlock the overlay to drag it around and resize it from the corner, then press again to lock it in place |
 | `Ctrl` `` ` `` | Show or hide the log panel (in the dashboard) |
 
 The dashboard has three tabs:
@@ -38,7 +39,7 @@ The dashboard has three tabs:
 - **Memory:** RAM in use
 - **Frame rate:** current FPS, average and 1% low, with live graphs, for whichever game is running
 
-Readings the machine doesn't provide are hidden automatically. CPU and GPU power draw, for example, usually can't be read inside a cloud session.
+Readings the machine doesn't provide are hidden automatically. Power draw isn't shown at all, because cloud sessions don't expose it.
 
 ## Frame rate
 

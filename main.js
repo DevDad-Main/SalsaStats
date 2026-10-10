@@ -38,6 +38,8 @@ let isWindowClosing = false;
 let initialHardwareSampleLogged = false;
 let currentUpdateState = { status: 'idle' };
 let frameCapture;
+let overlayEditMode = false;
+let overlayCustomPosition = null;
 
 function initializeLogging() {
   const userData = app.getPath('userData');
@@ -288,8 +290,44 @@ process.on('unhandledRejection', reason => {
   showFatalError('An unhandled main-process promise rejection occurred.', reason);
 });
 
+function overlayPositionPath() {
+  return path.join(app.getPath('userData'), 'settings', 'overlay-position.json');
+}
+
+function loadOverlayPosition() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(overlayPositionPath(), 'utf8'));
+    if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) return { x: saved.x, y: saved.y };
+  } catch {
+    // No saved position yet.
+  }
+  return null;
+}
+
+function saveOverlayPosition() {
+  try {
+    if (overlayCustomPosition) {
+      fs.mkdirSync(path.dirname(overlayPositionPath()), { recursive: true });
+      fs.writeFileSync(overlayPositionPath(), JSON.stringify(overlayCustomPosition));
+    } else {
+      fs.rmSync(overlayPositionPath(), { force: true });
+    }
+  } catch (error) {
+    logger.writeSync('warn', 'Unable to save the overlay position.', error);
+  }
+}
+
 function positionOverlay() {
   if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
+
+  if (overlayCustomPosition) {
+    const { workArea: area } = screen.getDisplayNearestPoint(overlayCustomPosition);
+    const [w, h] = mainWindow.getSize();
+    const x = Math.max(area.x, Math.min(overlayCustomPosition.x, area.x + area.width - w));
+    const y = Math.max(area.y, Math.min(overlayCustomPosition.y, area.y + area.height - h));
+    mainWindow.setPosition(Math.round(x), Math.round(y), false);
+    return;
+  }
 
   const { workArea } = screen.getPrimaryDisplay();
   const [width, height] = mainWindow.getSize();
@@ -376,8 +414,8 @@ function applyWindowStacking() {
   const forceAboveGames = overlay && overlayAboveGames;
   // A focusable overlay steals activation, which makes fullscreen games minimise.
   mainWindow.setFocusable(!overlay);
-  // Click-through so the overlay never intercepts the mouse while gaming.
-  mainWindow.setIgnoreMouseEvents(overlay);
+  // Click-through so the overlay never intercepts the mouse while gaming; edit mode lets it be moved.
+  mainWindow.setIgnoreMouseEvents(overlay && !overlayEditMode);
   mainWindow.setAlwaysOnTop(overlay || pinned, forceAboveGames ? 'screen-saver' : 'floating');
   if (forceAboveGames) mainWindow.moveTop();
 }
@@ -396,6 +434,7 @@ function syncOverlayZOrderMaintenance() {
 
 registerWindowHandler('window:mode', mode => {
   currentMode = ['compact', 'overlay'].includes(mode) ? mode : 'full';
+  if (currentMode !== 'overlay') overlayEditMode = false;
   if (currentMode === 'compact') {
     mainWindow.setMinimumSize(320, 210);
     mainWindow.setSize(360, 260, true);
@@ -412,9 +451,13 @@ registerWindowHandler('window:mode', mode => {
   positionOverlay();
 });
 
-registerWindowHandler('window:anchor', anchor => {
+registerWindowHandler('window:anchor', (anchor, reset) => {
   if (!['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(anchor)) return;
   overlayAnchor = anchor;
+  if (reset === true) {
+    overlayCustomPosition = null;
+    saveOverlayPosition();
+  }
   positionOverlay();
 });
 
@@ -430,7 +473,7 @@ registerWindowHandler('window:scale', scaleValue => {
     Math.round(OVERLAY_MIN_HEIGHT * boundedScale),
   );
   mainWindow.setSize(width, height, true);
-  positionOverlay();
+  if (!overlayEditMode && !overlayCustomPosition) positionOverlay();
 });
 
 registerWindowHandler('window:move', point => {
@@ -508,6 +551,7 @@ const SHORTCUTS = {
   customize: 'CommandOrControl+Alt+O',
   minimal: 'CommandOrControl+Alt+M',
   toggle: 'CommandOrControl+Alt+H',
+  edit: 'CommandOrControl+Alt+E',
 };
 
 function registerShortcuts() {
@@ -524,6 +568,18 @@ function registerShortcuts() {
       }, 250);
     },
     minimal: () => send('minimal'),
+    edit: () => {
+      if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
+      overlayEditMode = !overlayEditMode;
+      if (overlayEditMode && !mainWindow.isVisible()) mainWindow.showInactive();
+      if (!overlayEditMode) {
+        const [x, y] = mainWindow.getPosition();
+        overlayCustomPosition = { x, y };
+        saveOverlayPosition();
+      }
+      applyWindowStacking();
+      send(overlayEditMode ? 'edit-on' : 'edit-off');
+    },
     toggle: () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       if (mainWindow.isVisible()) mainWindow.hide();
@@ -554,6 +610,7 @@ app.whenReady().then(() => {
   registerUpdateHandlers();
   configureAutoUpdates();
   createWindow();
+  overlayCustomPosition = loadOverlayPosition();
   registerShortcuts();
   sampleStats();
 
