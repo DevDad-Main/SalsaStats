@@ -1281,7 +1281,6 @@
       setMode(document.body.classList.contains('compact') ? 'full' : 'compact');
     });
     overlayToggle.addEventListener('click', () => setMode('overlay'));
-    document.getElementById('settings-overlay').addEventListener('click', () => setMode('overlay'));
     document.querySelectorAll('[data-minimal]').forEach(input => {
       input.addEventListener('change', () => {
         editTarget().minimalRows[input.dataset.minimal] = input.checked;
