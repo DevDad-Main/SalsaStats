@@ -1480,7 +1480,7 @@
     });
 
     document.getElementById('window-minimize').addEventListener('click', () => statsApi.minimize());
-    document.getElementById('window-toggle-fullscreen').addEventListener('click', () => statsApi.toggleFullscreen());
+    document.getElementById('window-toggle-fullscreen').addEventListener('click', () => statsApi.toggleMaximize());
     document.getElementById('window-close').addEventListener('click', () => statsApi.closeWindow());
     refreshLogDirectory();
     new ResizeObserver(() => refreshCharts()).observe(chart);

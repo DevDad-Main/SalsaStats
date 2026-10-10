@@ -70,7 +70,7 @@ SalsaStats reads the frames a game presents on the machine it runs on, using [Pr
 In **Settings → Frame rate** you can choose:
 
 - **Raw render FPS**, exactly what the game renders
-- **Capped to stream rate** (30 to 240), to roughly match what GeForce NOW shows. The real stream rate can't be read, so you set the cap yourself.
+- **Cap displayed FPS** (30 to 240), to make SalsaStats' readings easier to compare with a stream rate. This only changes displayed values; it does not limit the game or GeForce NOW stream.
 
 Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Everything else works without it, and the status bar tells you when capture is unavailable.
 

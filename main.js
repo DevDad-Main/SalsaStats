@@ -27,7 +27,6 @@ let shutdownTimer;
 let fatalDialogTimer;
 let keybindCaptureTimer;
 let currentMode = 'full';
-let fullscreenRestoreBounds = null;
 let pinned = false;
 let overlayAboveGames = false;
 let overlayAnchor = 'top-right';
@@ -787,19 +786,9 @@ registerWindowHandler('window:move', point => {
 });
 
 registerWindowHandler('window:minimize', () => mainWindow.minimize());
-registerWindowHandler('window:toggle-fullscreen', () => {
-  if (mainWindow.isFullScreen()) {
-    const restoreBounds = fullscreenRestoreBounds;
-    mainWindow.once('leave-full-screen', () => {
-      fullscreenRestoreBounds = null;
-      if (!restoreBounds || mainWindow.isDestroyed()) return;
-      mainWindow.setBounds(fitInto(restoreBounds, displayFor(restoreBounds).workArea), false);
-    });
-    mainWindow.setFullScreen(false);
-    return;
-  }
-  fullscreenRestoreBounds = mainWindow.getBounds();
-  mainWindow.setFullScreen(true);
+registerWindowHandler('window:toggle-maximize', () => {
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
 });
 registerWindowHandler('window:close', () => mainWindow.close());
 registerWindowHandler('window:pin', shouldPin => {

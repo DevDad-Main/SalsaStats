@@ -7,7 +7,7 @@ const channels = {
   setScale: 'window:scale',
   moveWindow: 'window:move',
   minimize: 'window:minimize',
-  toggleFullscreen: 'window:toggle-fullscreen',
+  toggleMaximize: 'window:toggle-maximize',
   closeWindow: 'window:close',
   setPinned: 'window:pin',
 };
@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('salsaStats', {
   setOverlayHeight: height => ipcRenderer.send('window:height', height),
   moveWindow: point => ipcRenderer.send(channels.moveWindow, point),
   minimize: () => ipcRenderer.send(channels.minimize),
-  toggleFullscreen: () => ipcRenderer.send(channels.toggleFullscreen),
+  toggleMaximize: () => ipcRenderer.send(channels.toggleMaximize),
   closeWindow: () => ipcRenderer.send(channels.closeWindow),
   setPinned: pinned => ipcRenderer.send(channels.setPinned, pinned),
   getLogDirectory: () => ipcRenderer.invoke('logs:get-directory'),
