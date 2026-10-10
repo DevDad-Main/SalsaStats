@@ -141,13 +141,18 @@ function lookUpProcessInfo(pid) {
     + "; $product=$null; try { $product=$p.MainModule.FileVersionInfo.ProductName } catch {}"
     + "; [pscustomobject]@{name=($p.ProcessName+'.exe'); title=$p.MainWindowTitle; product=$product} | ConvertTo-Json -Compress";
   return new Promise(resolve => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
-      try {
-        resolve(error ? null : JSON.parse(String(stdout).trim()));
-      } catch {
-        resolve(null);
-      }
-    });
+    // spawn can throw synchronously (e.g. EPERM when policy blocks PowerShell), so fall back to null.
+    try {
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
+        try {
+          resolve(error ? null : JSON.parse(String(stdout).trim()));
+        } catch {
+          resolve(null);
+        }
+      });
+    } catch {
+      resolve(null);
+    }
   });
 }
 
@@ -217,7 +222,7 @@ function createPresentMonCapture({ exePath, logger } = {}) {
   function getSnapshot() {
     const fps = status === 'active' ? tracker.snapshot() : null;
     tracker.pendingLookups().forEach(pid => {
-      lookUpProcessInfo(pid).then(info => tracker.setInfo(pid, info));
+      lookUpProcessInfo(pid).then(info => tracker.setInfo(pid, info)).catch(() => {});
     });
     return { status: fps ? 'capturing' : status, message, fps };
   }
