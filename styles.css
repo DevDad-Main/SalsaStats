@@ -151,7 +151,7 @@
     .settings-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
     .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
     .settings-heading h2 { margin: 0; font-size: 15px; font-weight: 650; }
-    .settings-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: 18px; align-items: start; }
+    .settings-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); grid-template-areas: "controls preview"; gap: 18px; align-items: start; }
     .settings-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
     .settings-group { padding: 11px 0; border-top: 1px solid rgba(139,151,141,.16); }
     .settings-group h3 { margin: 0 0 8px; color: #bbc5b8; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
@@ -167,10 +167,11 @@
     .color-option input { width: 27px; height: 21px; padding: 1px; border: 1px solid var(--line); border-radius: 3px; background: transparent; cursor: pointer; }
     .select-option { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #aeb8ae; font-size: 10px; }
     .select-option select { max-width: 140px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; color: var(--text); background: var(--surface); font: inherit; }
-    .preview-wrap { position: sticky; top: 16px; align-self: start; min-width: 0; }
+    .settings-layout > .settings-controls { grid-area: controls; }
+    .preview-wrap { position: sticky; top: 16px; grid-area: preview; align-self: start; min-width: 0; }
     .preview-caption { display: flex; justify-content: space-between; margin-bottom: 8px; color: #aeb8ae; font-size: 9px; }
     .preview-stage { min-height: 350px; padding: 8px; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: 5px; background-color: #0c100e; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 18px 18px; }
-    .preview-stage .osd-shell { width: 100%; }
+    .preview-stage .osd-shell { width: 100%; margin-inline: auto; }
     .settings-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
     .settings-actions .window-action { border-color: var(--line); background: var(--surface-raised); }
     .settings-actions .window-action:disabled { opacity: .55; cursor: wait; }
@@ -211,9 +212,9 @@
     .preview-stage .osd-row { min-height: 15px; }
     [hidden] { display: none !important; }
     @media (max-width: 820px) {
-      .settings-layout { grid-template-columns: 1fr; }
+      .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "preview" "controls"; }
       .preview-wrap { position: static; }
-      .preview-stage { max-width: 380px; }
+      .preview-stage { min-height: 280px; }
     }
     @media (max-width: 900px) {
       .lower-grid { grid-template-columns: minmax(0, 1fr); }
@@ -368,8 +369,9 @@
     body.osd-editing .osd-grip { display: block; position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--lime) 50%); }
 
     /* Responsive settings cards */
-    .settings-controls { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .settings-controls { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
     .settings-controls.single { grid-template-columns: minmax(0, 560px); }
+    #overlay-controls > .settings-group:last-child { grid-column: 1 / -1; }
     .settings-options { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
     .appearance-options { grid-template-columns: 1fr; gap: 14px; }
     .appearance-options > * { min-width: 0; }
@@ -379,6 +381,8 @@
     .select-option select { max-width: 100%; min-width: 0; }
     .settings-group { min-width: 0; overflow: hidden; }
     @media (min-width: 1000px) { .appearance-options { grid-template-columns: 1fr 1fr; } }
+    .share-row { flex-wrap: wrap; }
+    .share-row .window-action { flex: 1 1 160px; }
 
     .update-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
     .update-version { font-size: 14px; font-weight: 600; color: var(--text); }

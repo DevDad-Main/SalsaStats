@@ -31,6 +31,7 @@
     const previewStage = document.getElementById('preview-stage');
     const osdPanel = document.getElementById('osd-panel');
     const maxSamples = 48;
+    const PREVIEW_BASE_WIDTH = 340;
     const defaultSettings = {
       visible: {
         gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true,
@@ -149,7 +150,7 @@
       const E = editTarget();
       const L = lookOf(P);
       const root = document.documentElement;
-      preview.style.width = `${L.size}%`;
+      preview.style.width = `${PREVIEW_BASE_WIDTH * L.size / 100}px`;
       root.style.setProperty('--osd-scale', L.scale / 100);
       root.style.setProperty('--osd-spacing', `${L.spacing || 0}px`);
       const effectiveOpacity = L.backgroundMode === 'none' ? 0 : L.opacity / 100;
