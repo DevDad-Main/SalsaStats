@@ -1,5 +1,6 @@
 # Generated app files
 release/
+vendor/
 .vite/
 dist/
 coverage/

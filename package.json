@@ -1,27 +1,26 @@
 {
   "name": "salsastats",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js",
+    "check": "node --check main.js && node --check logger.js && node --check stats.js && node --check preload.js && node --check renderer.js && node --check presentmon.js && node --check nvidia-perf.js",
     "test": "node --test",
     "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File build/create-icon.ps1 && node build/package-icon.js",
-    "build:addon": "cd nvidia-perf-addon && node-gyp rebuild --target=44.7.0 --dist-url=https://electronjs.org/headers --arch=x64 --msvs_version=2022",
-    "build:win": "npm run build:icon && npm run build:addon && npm run check && npm test && electron-builder --win nsis --x64 --publish never",
-    "release:win": "npm run build:icon && npm run build:addon && npm run check && npm test && electron-builder --win nsis --x64 --publish always"
+    "build:nvapi": "powershell -NoProfile -ExecutionPolicy Bypass -File build/build-nvapi-helper.ps1",
+    "fetch:presentmon": "powershell -NoProfile -ExecutionPolicy Bypass -File build/fetch-presentmon.ps1",
+    "build:win": "npm run build:icon && npm run fetch:presentmon && npm run build:nvapi && npm run check && npm test && electron-builder --win nsis --x64 --publish never",
+    "release:win": "npm run build:icon && npm run fetch:presentmon && npm run build:nvapi && npm run check && npm test && electron-builder --win nsis --x64 --publish always"
   },
   "license": "MIT",
   "dependencies": {
     "electron-updater": "6.8.9",
-    "systeminformation": "^5.18.6",
-    "node-addon-api": "^7.1.0"
+    "systeminformation": "^5.18.6"
   },
   "devDependencies": {
     "electron": "44.7.0",
-    "electron-builder": "26.15.3",
-    "node-gyp": "^11.0.0"
+    "electron-builder": "26.15.3"
   },
   "overrides": {
     "@electron/get": "5.1.0",
@@ -40,8 +39,15 @@
       "output": "release",
       "buildResources": "build"
     },
-    "asarUnpack": [
-      "nvidia-perf-addon/build/Release/nvidia_perf.node"
+    "extraResources": [
+      {
+        "from": "vendor/PresentMon.exe",
+        "to": "PresentMon.exe"
+      },
+      {
+        "from": "vendor/nvapi",
+        "to": "nvapi"
+      }
     ],
     "files": [
       "main.js",
@@ -54,7 +60,7 @@
       "loading.gif",
       "package.json",
       "nvidia-perf.js",
-      "nvidia-perf-addon/build/Release/nvidia_perf.node"
+      "presentmon.js"
     ],
     "win": {
       "target": [

@@ -1,13 +1,15 @@
-# SalsaStats 1.0.17
+# SalsaStats 1.0.18
 
 ## What's new
 
-- Refreshed the interface with a cooler slate palette, larger and more readable text, clearer cards and keyboard focus outlines.
-- Added an "Advanced GPU readings" option in Setup to opt in to the experimental NVIDIA NVAPI addon, with a restart button and status message.
-- The NVAPI addon stays off by default; GPU telemetry continues to use NVIDIA-SMI and WMI.
+- Replace the experimental C++ NVAPI addon with a small out-of-process helper built on NvAPIWrapper, so GPU temperature, clock and memory readings can no longer crash the app. It runs automatically and fills any gaps left by other GPU sources.
+- Add game frame rate capture (FPS, average and 1% low, with live graphs) using PresentMon. This needs administrator rights or membership of the "Performance Log Users" group; the dashboard explains when it is unavailable.
+- Fix a crash when dragging the overlay window.
+- Refreshed interface with a cooler palette, larger text and clearer cards.
+- Remove the NVAPI toggle from Setup now that the helper is safe to run by default.
 
 ## Install and update
 
-Download `SalsaStats-1.0.17-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
+Download `SalsaStats-1.0.18-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
 
 The installer is unsigned. SmartScreen or managed-device application-control policies may still warn or block it.

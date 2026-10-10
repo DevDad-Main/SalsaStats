@@ -242,6 +242,54 @@
       drawSeries('gpu', colors.getPropertyValue('--gpu-color').trim());
     }
 
+    var frametimes = [];
+
+    function renderFrames(frames) {
+      const fps = frames?.fps;
+      frametimes = fps ? fps.frametimes : [];
+      const show = value => (fps ? String(value) : '--');
+      setField('fpsCurrent', show(fps?.current));
+      setField('fpsAverage', show(fps?.average));
+      setField('fpsLow', show(fps?.low));
+      document.getElementById('fps-value').textContent = show(fps?.current);
+      document.getElementById('fps-average').textContent = show(fps?.average);
+      document.getElementById('fps-low').textContent = show(fps?.low);
+
+      let tag = 'No capture source';
+      let note = frames?.message || '';
+      if (fps) {
+        tag = fps.application;
+        note = `Capturing ${fps.application}.`;
+      } else if (frames?.status === 'active') {
+        tag = 'Waiting for a game';
+        note = 'Start a game to see its frame rate.';
+      } else if (frames?.status === 'starting') {
+        tag = 'Starting';
+        note = 'Starting frame capture...';
+      }
+      document.getElementById('fps-tag').textContent = tag;
+      document.getElementById('fps-note').textContent = note;
+      setField('fpsSource', fps ? fps.application : tag);
+      document.querySelector('[data-row="fpsNote"]').textContent = fps ? `Capturing ${fps.application}` : (note || 'Game capture unavailable');
+    }
+
+    function drawFrameLine(canvas, values, color) {
+      if (!values.length) return;
+      const bounds = canvas.getBoundingClientRect();
+      const chartContext = canvas.getContext('2d');
+      const max = Math.max(...values) * 1.1 || 1;
+      chartContext.beginPath();
+      values.forEach((value, index) => {
+        const x = values.length <= 1 ? 0 : (index / (values.length - 1)) * bounds.width;
+        const y = 2 + (bounds.height - 4) * (1 - value / max);
+        if (index === 0) chartContext.moveTo(x, y);
+        else chartContext.lineTo(x, y);
+      });
+      chartContext.strokeStyle = color;
+      chartContext.lineWidth = 1.5;
+      chartContext.stroke();
+    }
+
     function drawOsdCharts() {
       document.querySelectorAll('.osd-chart').forEach(canvas => {
         const bounds = canvas.getBoundingClientRect();
@@ -260,6 +308,9 @@
           chartContext.lineTo(x, bounds.height - 2);
           chartContext.stroke();
         }
+        const fpsColor = getComputedStyle(document.documentElement).getPropertyValue('--fps-color').trim() || '#c084fc';
+        if (canvas.dataset.chart === 'rate') drawFrameLine(canvas, frametimes.map(ms => 1000 / ms), fpsColor);
+        if (canvas.dataset.chart === 'time') drawFrameLine(canvas, frametimes, fpsColor);
       });
     }
 
@@ -304,9 +355,7 @@
       setField('cpuClock', stats.cpu.clock === null ? 'Unavailable' : `${stats.cpu.clock} MHz`);
       setField('cpuPower', 'Unavailable');
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
-      setField('fpsCurrent', '--');
-      setField('fpsAverage', '--');
-      setField('fpsLow', '--');
+      renderFrames(stats.frames);
 
       document.getElementById('sample-time').textContent = `Updated ${new Date(stats.sampledAt).toLocaleTimeString()}`;
       samples.push({ cpu: stats.cpu.usage, gpu: stats.gpu.usage });
@@ -422,43 +471,6 @@
       }
     });
 
-    const nvapiToggle = document.getElementById('nvapi-enabled');
-    const nvapiStatus = document.getElementById('nvapi-status');
-    const nvapiRestart = document.getElementById('nvapi-restart');
-    let nvapiLoadedEnabled = false;
-
-    function renderNvapi(state) {
-      const pending = nvapiToggle.checked !== nvapiLoadedEnabled;
-      nvapiRestart.hidden = !pending;
-      if (pending) nvapiStatus.textContent = 'Restart SalsaStats to apply this change.';
-      else if (state?.status?.loaded) nvapiStatus.textContent = 'NVAPI is active.';
-      else nvapiStatus.textContent = state?.status?.error || '';
-    }
-
-    async function refreshNvapi() {
-      if (!statsApi?.getNvapi) return;
-      try {
-        const state = await statsApi.getNvapi();
-        if (!state) return;
-        nvapiToggle.checked = state.enabled;
-        nvapiLoadedEnabled = state.enabled;
-        renderNvapi(state);
-      } catch (error) {
-        nvapiStatus.textContent = `Unable to read NVAPI setting: ${error.message}`;
-      }
-    }
-
-    nvapiToggle.addEventListener('change', async () => {
-      const result = await statsApi.setNvapi(nvapiToggle.checked).catch(error => ({ ok: false, error: error.message }));
-      if (!result?.ok) {
-        nvapiToggle.checked = !nvapiToggle.checked;
-        nvapiStatus.textContent = `Unable to save setting: ${result?.error || 'Unknown error'}`;
-        return;
-      }
-      renderNvapi();
-    });
-    nvapiRestart.addEventListener('click', () => statsApi.restartApp());
-
     document.getElementById('open-logs-folder').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -497,7 +509,6 @@
     document.getElementById('window-toggle-fullscreen').addEventListener('click', () => statsApi.toggleFullscreen());
     document.getElementById('window-close').addEventListener('click', () => statsApi.closeWindow());
     refreshLogDirectory();
-    refreshNvapi();
     new ResizeObserver(() => refreshCharts()).observe(chart);
     document.addEventListener('visibilitychange', refreshCharts);
     window.addEventListener('beforeunload', unsubscribeStats, { once: true });

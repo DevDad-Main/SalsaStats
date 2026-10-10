@@ -264,8 +264,6 @@ function createStatsReader() {
   let hasPrimaryGpuTelemetry = false;
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
-  let nvapiAvailable = false;
-  let nvapiChecked = false;
 
   return async function readStats() {
     const [load, memory] = await Promise.all([
@@ -291,29 +289,9 @@ function createStatsReader() {
       }
     }
 
-    // Try NVAPI first for GPU metrics (no admin required)
-    let nvapiMetrics = null;
-    if (!nvapiChecked) {
-      nvapiAvailable = nvidiaPerf.isAvailable();
-      nvapiChecked = true;
-      if (nvapiAvailable) {
-        console.log('NVAPI addon loaded successfully');
-      }
-    }
-
-    if (nvapiAvailable) {
-      try {
-        nvapiMetrics = nvidiaPerf.getGpuMetrics();
-        if (nvapiMetrics && nvapiMetrics.gpus && nvapiMetrics.gpus.length > 0) {
-          hasPrimaryGpuTelemetry = true;
-          gpuTelemetrySource = 'nvapi';
-        }
-      } catch (error) {
-        console.warn('NVAPI metrics failed:', error.message);
-        nvapiAvailable = false;
-        nvapiMetrics = null;
-      }
-    }
+    // NVAPI (out-of-process helper) fills gaps left by the other GPU sources.
+    const nvapiMetrics = nvidiaPerf.isAvailable() ? nvidiaPerf.getGpuMetrics() : null;
+    const nvapiGpu = nvapiMetrics?.gpus?.[0] || null;
 
     if (!hasPrimaryGpuTelemetry && (now - lastGpuRefresh >= GPU_REFRESH_MS)) {
       lastGpuRefresh = now;
@@ -360,7 +338,7 @@ function createStatsReader() {
       }
     }
 
-    // Build GPU object from NVAPI if available, otherwise fall back
+    // Build the GPU object from the standard sources, then overlay NVAPI readings.
     let gpuName = 'Graphics device not detected';
     let gpuUsage = null;
     let gpuTemp = null;
@@ -370,29 +348,7 @@ function createStatsReader() {
     let gpuPower = null;
     let detectedAdapters = [];
 
-    if (nvapiMetrics && nvapiMetrics.gpus && nvapiMetrics.gpus.length > 0) {
-      const gpu = nvapiMetrics.gpus[0];
-      gpuName = gpu.name || gpuName;
-      gpuUsage = Number.isFinite(gpu.gpuUtilization) ? gpu.gpuUtilization : 
-                 Number.isFinite(gpu.utilization) ? gpu.utilization : null;
-      gpuTemp = Number.isFinite(gpu.temperature) ? gpu.temperature : null;
-      gpuMemUsed = Number.isFinite(gpu.memoryUsed) ? gpu.memoryUsed : 
-                   Number.isFinite(gpu.memoryTotal) && Number.isFinite(gpu.memoryFree) ? gpu.memoryTotal - gpu.memoryFree : null;
-      gpuMemTotal = Number.isFinite(gpu.memoryTotal) ? gpu.memoryTotal : null;
-      gpuClock = Number.isFinite(gpu.clockGraphics) ? gpu.clockGraphics : 
-                 Number.isFinite(gpu.clockCore) ? gpu.clockCore : null;
-      gpuPower = Number.isFinite(gpu.powerDraw) ? gpu.powerDraw : null;
-
-      detectedAdapters = nvapiMetrics.gpus.map(g => ({
-        vendor: 'NVIDIA',
-        model: g.name || null,
-        name: g.name || null,
-        source: 'nvapi',
-        hasTelemetry: true,
-        busId: g.busId || null,
-        ramType: g.ramType || null,
-      }));
-    } else {
+    {
       gpuName = gpuController.model || gpuController.name
         || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
         || 'Graphics device not detected';
@@ -423,6 +379,16 @@ function createStatsReader() {
           ? [{ name: gpuSmiController.name, model: gpuSmiController.name, source: 'nvidia-smi', hasTelemetry: gpuTelemetrySource === 'nvidia-smi' }]
           : []),
       ];
+    }
+
+    if (nvapiGpu) {
+      gpuTemp = firstFinite(nvapiGpu.temperature, gpuTemp);
+      gpuClock = firstFinite(nvapiGpu.clockGraphics, gpuClock);
+      gpuUsage = firstFinite(gpuUsage, nvapiGpu.utilization);
+      gpuMemUsed = firstFinite(gpuMemUsed, nvapiGpu.memoryUsed);
+      gpuMemTotal = firstFinite(gpuMemTotal, nvapiGpu.memoryTotal);
+      if (gpuName === 'Graphics device not detected' && nvapiGpu.name) gpuName = nvapiGpu.name;
+      if (!hasPrimaryGpuTelemetry) gpuTelemetrySource = 'nvapi';
     }
 
     return {

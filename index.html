@@ -77,15 +77,15 @@
 
       <article class="fps-panel">
         <div>
-          <div class="fps-header"><span class="card-label">Game frame rate</span><span class="capture-tag">No capture source</span></div>
-          <div class="fps-value">--<small>FPS</small></div>
-          <div class="fps-note">Game FPS needs a capture source. This app does not inject into games or require administrator access.</div>
+          <div class="fps-header"><span class="card-label">Game frame rate</span><span class="capture-tag" id="fps-tag">No capture source</span></div>
+          <div class="fps-value"><span id="fps-value">--</span><small>FPS</small></div>
+          <div class="fps-note" id="fps-note">Starting frame capture...</div>
         </div>
         <div>
           <div class="fps-divider"></div>
           <div class="fps-stats">
-            <div><div class="fps-stat-label">Average FPS</div><div class="fps-stat-value">--</div></div>
-            <div><div class="fps-stat-label">1% low</div><div class="fps-stat-value">--</div></div>
+            <div><div class="fps-stat-label">Average FPS</div><div class="fps-stat-value" id="fps-average">--</div></div>
+            <div><div class="fps-stat-label">1% low</div><div class="fps-stat-value" id="fps-low">--</div></div>
           </div>
         </div>
       </article>
@@ -147,13 +147,6 @@
             <label class="check-option"><input id="overlay-above-games" type="checkbox">Force above fullscreen games</label>
             <p class="setting-note">May steal focus or disrupt some games. Leave off if a game minimizes or closes.</p>
           </section>
-          <section class="settings-group">
-            <h3>Advanced GPU readings</h3>
-            <label class="check-option"><input id="nvapi-enabled" type="checkbox">Use NVIDIA NVAPI (experimental)</label>
-            <p class="setting-note">Reads GPU temperature, clock and power directly. If the app becomes unstable, turn this off and restart.</p>
-            <p class="nvapi-status" id="nvapi-status" role="status" aria-live="polite"></p>
-            <button class="window-action" id="nvapi-restart" type="button" hidden>Restart to apply</button>
-          </section>
         </div>
         <aside class="preview-wrap">
           <div class="preview-caption"><span>Live preview</span><span>Current system readings</span></div>
@@ -207,8 +200,8 @@
         <div class="osd-row" data-row="fpsAverage"><span class="osd-label">AVG</span><span class="osd-value" data-field="fpsAverage">--</span></div>
         <div class="osd-row" data-row="fpsLow"><span class="osd-label">1% Low</span><span class="osd-value" data-field="fpsLow">--</span></div>
         <p class="osd-note" data-row="fpsNote">Game capture unavailable</p>
-        <div class="osd-chart-block" data-row="graphRate"><div class="osd-chart-heading"><span>Framerate</span><span>No capture source</span></div><canvas class="osd-chart" data-chart="rate"></canvas></div>
-        <div class="osd-chart-block" data-row="graphTime"><div class="osd-chart-heading"><span>Frametime</span><span>No capture source</span></div><canvas class="osd-chart" data-chart="time"></canvas></div>
+        <div class="osd-chart-block" data-row="graphRate"><div class="osd-chart-heading"><span>Framerate</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="rate"></canvas></div>
+        <div class="osd-chart-block" data-row="graphTime"><div class="osd-chart-heading"><span>Frametime</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="time"></canvas></div>
       </section>
     </div>
   </section>

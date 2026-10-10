@@ -1,81 +1,82 @@
-const path = require('node:path');
 const fs = require('node:fs');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
 
-let nvidiaPerf = null;
-let loadError = null;
-let enabled = process.env.SALSASTATS_NVAPI === '1';
+let child = null;
+let latest = null;
+let lastError = null;
+let buffer = '';
 
-function setEnabled(value) {
-  enabled = value === true || process.env.SALSASTATS_NVAPI === '1';
-}
-
-function getAddonPath() {
-  const relative = path.join('nvidia-perf-addon', 'build', 'Release', 'nvidia_perf.node');
+function resolveHelperPath(resourcesPath, baseDirectory) {
   const candidates = [
-    // Packaged app: native modules must live outside the asar archive
-    path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), relative),
-    path.join(process.resourcesPath || '', 'app.asar.unpacked', relative),
-    path.join(__dirname, relative),
-  ];
-
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+    resourcesPath && path.join(resourcesPath, 'nvapi', 'NvapiHelper.exe'),
+    path.join(baseDirectory, 'vendor', 'nvapi', 'NvapiHelper.exe'),
+  ].filter(Boolean);
+  return candidates.find(candidate => fs.existsSync(candidate)) || null;
 }
 
-function tryLoadAddon() {
-  if (nvidiaPerf !== null || loadError !== null) return;
-
-  // The addon calls NVAPI function IDs that are unverified and can crash the process.
-  if (!enabled) {
-    loadError = new Error('NVAPI addon disabled (enable it in Setup, or set SALSASTATS_NVAPI=1)');
-    return;
-  }
-
-  const addonPath = getAddonPath();
-  if (!addonPath) {
-    loadError = new Error('NVAPI addon not found (not built yet?)');
-    console.warn('NVIDIA NVAPI addon not available:', loadError.message);
-    return;
-  }
-
+function handleLine(line) {
   try {
-    nvidiaPerf = require(addonPath);
-    console.log('NVAPI addon loaded from:', addonPath);
-  } catch (error) {
-    loadError = error;
-    console.warn('NVIDIA NVAPI addon failed to load:', error.message);
-    nvidiaPerf = null;
+    const data = JSON.parse(line);
+    if (data.error) lastError = data.error;
+    else {
+      latest = data;
+      lastError = null;
+    }
+  } catch {
+    // Ignore partial or non-JSON output.
   }
 }
 
-function getStatus() {
-  tryLoadAddon();
-  return { loaded: nvidiaPerf !== null, error: loadError ? loadError.message : null };
+// The helper runs out of process, so a failure in NVAPI cannot take the app down.
+function start({ resourcesPath, baseDirectory, logger } = {}) {
+  if (child) return;
+  const exePath = resolveHelperPath(resourcesPath, baseDirectory);
+  if (!exePath) {
+    lastError = 'NVAPI helper not found.';
+    return;
+  }
+  try {
+    child = spawn(exePath, [], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (error) {
+    lastError = error.message;
+    logger?.writeSync('warn', 'Unable to start the NVAPI helper.', error);
+    return;
+  }
+  child.stdout.on('data', chunk => {
+    buffer += chunk.toString('utf8');
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop();
+    lines.forEach(handleLine);
+  });
+  child.stderr.on('data', () => {});
+  child.on('error', error => {
+    lastError = error.message;
+    child = null;
+  });
+  child.on('exit', code => {
+    child = null;
+    latest = null;
+    if (!lastError) lastError = `NVAPI helper exited (code ${code}).`;
+    logger?.writeSync('warn', 'NVAPI helper exited.', { code, error: lastError });
+  });
+}
+
+function stop() {
+  if (child) child.kill();
+  child = null;
 }
 
 function isAvailable() {
-  tryLoadAddon();
-  return nvidiaPerf !== null;
+  return latest !== null;
 }
 
 function getGpuMetrics() {
-  tryLoadAddon();
-  if (!nvidiaPerf) return { error: loadError?.message || 'NVAPI addon not loaded', gpus: [], count: 0, source: 'nvapi' };
-  return nvidiaPerf.getGpuMetrics();
+  return latest || { gpus: [], error: lastError };
 }
 
-function getFrameRate() {
-  tryLoadAddon();
-  if (!nvidiaPerf) return { error: loadError?.message || 'NVAPI addon not loaded', frameRate: 0, available: false };
-  return nvidiaPerf.getFrameRate();
+function getStatus() {
+  return { loaded: latest !== null, error: latest ? null : lastError };
 }
 
-module.exports = {
-  setEnabled,
-  getStatus,
-  isAvailable,
-  getGpuMetrics,
-  getFrameRate
-};
+module.exports = { start, stop, isAvailable, getGpuMetrics, getStatus, resolveHelperPath };
