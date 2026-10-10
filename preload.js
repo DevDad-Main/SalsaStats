@@ -43,7 +43,6 @@ contextBridge.exposeInMainWorld('salsaStats', {
   getLogin: () => ipcRenderer.invoke('app:get-login'),
   setLogin: enabled => ipcRenderer.invoke('app:set-login', enabled),
   copyImage: rect => ipcRenderer.invoke('clipboard:image', rect),
-  setNetwork: (enabled, host) => ipcRenderer.invoke('network:set', enabled, host),
   onShortcut: callback => {
     const listener = (_event, action) => callback(action);
     ipcRenderer.on('shortcut', listener);

@@ -36,8 +36,7 @@
         gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true,
         cpuTemp: true, cpuUsage: true, cpuClock: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
-        netPing: false, netJitter: false, netLoss: false,
-        encoderLoad: false, diskRead: false, diskWrite: false, netIn: false, netOut: false,
+        encoderLoad: false, diskRead: false, diskWrite: false,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -55,7 +54,6 @@
       minimalRows: { fpsCurrent: true, gpuUsage: true, gpuTemp: true, cpuUsage: true },
       minimalLook: { scale: 100, size: 100, spacing: 0, opacity: 88, backgroundMode: 'soft', border: true },
       hideUnavailable: true,
-      network: { enabled: false, host: '1.1.1.1' },
       startInOverlay: false,
       autoOverlay: false,
     };
@@ -74,7 +72,6 @@
           games: Array.isArray(saved.games) ? saved.games : [],
           minimalRows: { ...defaultSettings.minimalRows, ...saved.minimalRows },
           minimalLook: { ...defaultSettings.minimalLook, ...saved.minimalLook },
-          network: { ...defaultSettings.network, ...saved.network },
         };
       }
     } catch (error) {
@@ -152,6 +149,7 @@
       const E = editTarget();
       const L = lookOf(P);
       const root = document.documentElement;
+      preview.style.width = `${L.size}%`;
       root.style.setProperty('--osd-scale', L.scale / 100);
       root.style.setProperty('--osd-spacing', `${L.spacing || 0}px`);
       const effectiveOpacity = L.backgroundMode === 'none' ? 0 : L.opacity / 100;
@@ -218,8 +216,6 @@
       document.getElementById('opacity-output').textContent = `${E.opacity}%`;
       document.getElementById('background-setting').value = E.backgroundMode;
       document.getElementById('border-setting').checked = E.border !== false;
-      document.getElementById('net-enabled').checked = settings.network.enabled;
-      document.getElementById('net-host').value = settings.network.host;
       document.getElementById('start-overlay').checked = settings.startInOverlay === true;
       document.getElementById('auto-overlay').checked = settings.autoOverlay === true;
       document.querySelectorAll('[data-min]').forEach(input => {
@@ -281,21 +277,6 @@
         if (document.body.classList.contains('overlay')) statsApi.setScale(lookOf(appliedProfile()).size);
       });
     });
-    function syncNetwork() {
-      statsApi.setNetwork?.(settings.network.enabled, settings.network.host);
-    }
-    document.getElementById('net-enabled').addEventListener('change', event => {
-      settings.network.enabled = event.target.checked;
-      saveSettings();
-      syncNetwork();
-    });
-    document.getElementById('net-host').addEventListener('change', event => {
-      settings.network.host = event.target.value.trim() || '1.1.1.1';
-      event.target.value = settings.network.host;
-      saveSettings();
-      syncNetwork();
-    });
-    syncNetwork();
     document.getElementById('border-setting').addEventListener('change', event => {
       editTarget().border = event.target.checked;
       saveSettings();
@@ -889,30 +870,18 @@
       setField('cpuClock', stats.cpu.clock === null ? 'Unavailable' : `${stats.cpu.clock} MHz`);
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
-      const net = stats.network;
-      const netText = value => (Number.isFinite(value) ? String(Math.round(value)) : '--');
-      setField('netPing', netText(net?.pingMs));
-      setField('netJitter', netText(net?.jitterMs));
-      setField('netLoss', net ? String(net.lossPct) : '--');
       trackSession(stats);
       lastStats = stats;
       const io = stats.io || {};
       const oneDecimal = value => (Number.isFinite(value) ? value.toFixed(1) : '--');
       setField('encoderLoad', Number.isFinite(stats.gpu.encoder) ? String(stats.gpu.encoder) : '--');
-      setField('netIn', oneDecimal(io.netInMbps));
-      setField('netOut', oneDecimal(io.netOutMbps));
       setField('diskRead', oneDecimal(io.diskReadMBps));
       setField('diskWrite', oneDecimal(io.diskWriteMBps));
       renderCoreBars(stats.cpu.perCore || []);
       const unavailable = {
         encoderLoad: !Number.isFinite(stats.gpu.encoder),
-        netIn: !Number.isFinite(io.netInMbps),
-        netOut: !Number.isFinite(io.netOutMbps),
         diskRead: !Number.isFinite(io.diskReadMBps),
         diskWrite: !Number.isFinite(io.diskWriteMBps),
-        netPing: !net || net.pingMs === null,
-        netJitter: !net || net.jitterMs === null,
-        netLoss: !net,
         gpuTemp: stats.gpu.temperature === null,
         gpuClock: stats.gpu.clock === null,
         gpuVram: !Number.isFinite(stats.gpu.memoryUsed),
@@ -1430,7 +1399,6 @@
       lines.push(`CPU: ${stats.cpu.name} \u00b7 ${stats.cpu.usage}%`);
       lines.push(`RAM: ${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`);
       if (fps) lines.push(`FPS: ${Math.min(fps.current, cap)} (avg ${Math.min(fps.average, cap)}, 1% low ${Math.min(fps.low, cap)})`);
-      if (stats.network && Number.isFinite(stats.network.pingMs)) lines.push(`Ping: ${Math.round(stats.network.pingMs)} ms, jitter ${Math.round(stats.network.jitterMs || 0)} ms, loss ${stats.network.lossPct}%`);
       return lines.join('\n');
     }
     const shareStatus = document.getElementById('share-status');
@@ -1497,7 +1465,6 @@
         const parts = [`Avg ${item.avgFps} FPS`, `1% low ${item.low}`];
         if (item.peakTemp !== null) parts.push(`Peak ${item.peakTemp} C`);
         if (item.peakVram !== null) parts.push(`VRAM ${(item.peakVram / 1024).toFixed(1)} GB`);
-        if (item.avgPing !== null) parts.push(`Ping ${item.avgPing} ms`);
         stats.textContent = parts.join('  \u00b7  ');
         row.append(title, stats);
         list.append(row);
@@ -1519,7 +1486,6 @@
         low: Math.round(done.lowSum / done.count),
         peakTemp: done.peakTemp,
         peakVram: done.peakVram,
-        avgPing: done.pingCount ? Math.round(done.pingSum / done.pingCount) : null,
       });
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessions.slice(0, 40)));
       renderSessions();
@@ -1539,7 +1505,7 @@
         const matched = matchGame(fps.application);
         session = {
           key, name: (matched && matched.name) || fps.displayName || fps.application,
-          started: now, last: now, count: 0, fpsSum: 0, lowSum: 0, peakTemp: null, peakVram: null, pingSum: 0, pingCount: 0,
+          started: now, last: now, count: 0, fpsSum: 0, lowSum: 0, peakTemp: null, peakVram: null,
         };
       }
       session.last = now;
@@ -1548,10 +1514,6 @@
       session.lowSum += Math.min(fps.low, cap);
       if (Number.isFinite(stats.gpu.temperature)) session.peakTemp = Math.max(session.peakTemp ?? 0, stats.gpu.temperature);
       if (Number.isFinite(stats.gpu.memoryUsed)) session.peakVram = Math.max(session.peakVram ?? 0, stats.gpu.memoryUsed);
-      if (Number.isFinite(stats.network?.pingMs)) {
-        session.pingSum += stats.network.pingMs;
-        session.pingCount += 1;
-      }
     }
 
     document.getElementById('sessions-clear').addEventListener('click', () => {

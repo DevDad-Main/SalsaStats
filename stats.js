@@ -262,18 +262,11 @@ function parseWmiCsv(output) {
   });
 }
 
-// Network (Mbps) and disk (MB/s) throughput from Windows performance counters.
+// Disk throughput from Windows performance counters.
 async function readIoCounters() {
-  const [network, disk] = await Promise.all([
-    runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_Tcpip_NetworkInterface', 'get', 'BytesReceivedPersec,BytesSentPersec,Name', '/format:csv']),
-    runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk', 'get', 'DiskReadBytesPersec,DiskWriteBytesPersec,Name', '/format:csv']),
-  ]);
-  const adapters = parseWmiCsv(network).filter(row => row.Name && !/isatap|loopback|teredo|pseudo/i.test(row.Name));
+  const disk = await runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk', 'get', 'DiskReadBytesPersec,DiskWriteBytesPersec,Name', '/format:csv']);
   const total = parseWmiCsv(disk).find(row => row.Name === '_Total');
-  const sum = key => adapters.reduce((value, row) => value + (Number(row[key]) || 0), 0);
   return {
-    netInMbps: adapters.length ? (sum('BytesReceivedPersec') * 8) / 1e6 : null,
-    netOutMbps: adapters.length ? (sum('BytesSentPersec') * 8) / 1e6 : null,
     diskReadMBps: total ? Number(total.DiskReadBytesPersec) / 1048576 : null,
     diskWriteMBps: total ? Number(total.DiskWriteBytesPersec) / 1048576 : null,
   };
@@ -293,7 +286,7 @@ function createStatsReader() {
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
   let lastIoRefresh = 0;
-  let ioCache = { netInMbps: null, netOutMbps: null, diskReadMBps: null, diskWriteMBps: null };
+  let ioCache = { diskReadMBps: null, diskWriteMBps: null };
 
   return async function readStats() {
     const [load, memory] = await Promise.all([

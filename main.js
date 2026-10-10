@@ -6,7 +6,6 @@ const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
 const nvidiaPerf = require('./nvidia-perf');
 const { createPresentMonCapture, resolvePresentMonPath } = require('./presentmon');
-const { createNetworkProbe } = require('./network');
 
 const SAMPLE_INTERVAL_MS = 2000;
 const OVERLAY_BASE_WIDTH = 340;
@@ -27,6 +26,7 @@ let statsInFlight = false;
 let shutdownTimer;
 let fatalDialogTimer;
 let currentMode = 'full';
+let fullscreenRestoreBounds = null;
 let pinned = false;
 let overlayAboveGames = false;
 let overlayAnchor = 'top-right';
@@ -49,7 +49,6 @@ function applyAutoOverlay() {
     mainWindow.hide();
   }
 }
-const networkProbe = createNetworkProbe();
 let overlayEditMode = false;
 let overlayCustomPosition = null;
 
@@ -64,7 +63,6 @@ function initializeLogging() {
 function stopBackgroundWork() {
   isQuitting = true;
   frameCapture?.stop();
-  networkProbe.stop();
   nvidiaPerf.stop();
   clearTimeout(statsTimer);
   clearInterval(overlayZOrderTimer);
@@ -357,14 +355,6 @@ function registerLogHandlers() {
     }
   });
 
-  ipcMain.handle('network:set', (event, enabled, host) => {
-    if (!isTrustedRenderer(event)) return false;
-    if (enabled !== true) {
-      networkProbe.stop();
-      return true;
-    }
-    return networkProbe.start(String(host || '1.1.1.1').trim());
-  });
   ipcMain.handle('fs:scan', (event, directory) => {
     if (!isTrustedRenderer(event) || !directory) return null;
     try {
@@ -796,7 +786,20 @@ registerWindowHandler('window:move', point => {
 });
 
 registerWindowHandler('window:minimize', () => mainWindow.minimize());
-registerWindowHandler('window:toggle-fullscreen', () => mainWindow.setFullScreen(!mainWindow.isFullScreen()));
+registerWindowHandler('window:toggle-fullscreen', () => {
+  if (mainWindow.isFullScreen()) {
+    const restoreBounds = fullscreenRestoreBounds;
+    mainWindow.once('leave-full-screen', () => {
+      fullscreenRestoreBounds = null;
+      if (!restoreBounds || mainWindow.isDestroyed()) return;
+      mainWindow.setBounds(fitInto(restoreBounds, displayFor(restoreBounds).workArea), false);
+    });
+    mainWindow.setFullScreen(false);
+    return;
+  }
+  fullscreenRestoreBounds = mainWindow.getBounds();
+  mainWindow.setFullScreen(true);
+});
 registerWindowHandler('window:close', () => mainWindow.close());
 registerWindowHandler('window:pin', shouldPin => {
   pinned = shouldPin === true;
@@ -809,7 +812,6 @@ async function sampleStats() {
   try {
     const stats = await readStats();
     stats.frames = frameCapture ? frameCapture.getSnapshot() : { status: 'missing', message: '', fps: null };
-    stats.network = networkProbe.getStats();
     if (!initialHardwareSampleLogged) {
       logger.writeSync('info', 'Initial system telemetry sample.', {
         cpuName: stats.cpu.name,

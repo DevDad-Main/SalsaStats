@@ -163,22 +163,11 @@
           </section>
           <section class="settings-group">
             <h3>System I/O and encoder</h3>
-            <p class="setting-note">Encoder is the video engine load, which on GeForce NOW is the stream being encoded. Net Out roughly tracks the stream bitrate. Per-second values in megabits or megabytes.</p>
+            <p class="setting-note">Encoder is the video engine load, which on GeForce NOW is the stream being encoded. Disk readings are per-second rates in megabytes.</p>
             <div class="settings-options">
               <label class="check-option"><input type="checkbox" data-setting="encoderLoad">Encoder load</label>
-              <label class="check-option"><input type="checkbox" data-setting="netOut">Net Out</label>
-              <label class="check-option"><input type="checkbox" data-setting="netIn">Net In</label>
               <label class="check-option"><input type="checkbox" data-setting="diskRead">Disk Read</label>
               <label class="check-option"><input type="checkbox" data-setting="diskWrite">Disk Write</label>
-            </div>
-          </section>
-          <section class="settings-group">
-            <h3>Network</h3>
-            <p class="setting-note">Turn the readout on in Settings first.</p>
-            <div class="settings-options">
-              <label class="check-option"><input type="checkbox" data-setting="netPing">Ping</label>
-              <label class="check-option"><input type="checkbox" data-setting="netJitter">Jitter</label>
-              <label class="check-option"><input type="checkbox" data-setting="netLoss">Packet loss</label>
             </div>
           </section>
           <section class="settings-group">
@@ -203,7 +192,7 @@
             <p class="setting-note">How the minimal view looks. These are separate from the detailed overlay below.</p>
             <div class="appearance-options">
               <label class="range-option">Text size <output data-min-output="scale">100%</output><input data-min="scale" type="range" min="80" max="140" value="100"></label>
-              <label class="range-option">Panel size <output data-min-output="size">100%</output><input data-min="size" type="range" min="70" max="150" value="100"></label>
+              <label class="range-option">Panel width <output data-min-output="size">100%</output><input data-min="size" type="range" min="70" max="150" value="100"></label>
               <label class="range-option">Group spacing <output data-min-output="spacing">0 px</output><input data-min="spacing" type="range" min="0" max="60" value="0"></label>
               <label class="range-option">Background <output data-min-output="opacity">88%</output><input data-min="opacity" type="range" min="0" max="100" value="88"></label>
               <label class="select-option">Style<select data-min="backgroundMode"><option value="none">None</option><option value="soft">Soft</option><option value="full">Full</option></select></label>
@@ -214,7 +203,7 @@
             <h3>Appearance</h3>
             <div class="appearance-options">
               <label class="range-option">Text size <output class="range-output" id="scale-output">100%</output><input id="scale-setting" type="range" min="80" max="140" value="100"></label>
-              <label class="range-option">Panel size <output class="range-output" id="size-output">100%</output><input id="size-setting" type="range" min="70" max="150" value="100"></label>
+              <label class="range-option">Panel width <output class="range-output" id="size-output">100%</output><input id="size-setting" type="range" min="70" max="150" value="100"></label>
               <label class="range-option">Group spacing <output class="range-output" id="spacing-output">0 px</output><input id="spacing-setting" type="range" min="0" max="60" value="0"></label>
               <label class="range-option">Background <output class="range-output" id="opacity-output">88%</output><input id="opacity-setting" type="range" min="0" max="100" value="88"></label>
               <label class="select-option">OSD style<select id="background-setting"><option value="none">None</option><option value="soft" selected>Soft</option><option value="full">Full</option></select></label>
@@ -269,12 +258,6 @@
           <label class="check-option extra"><input id="start-overlay" type="checkbox">Open straight into the overlay</label>
           <label class="check-option extra"><input id="auto-overlay" type="checkbox">Show the overlay only while a game is running</label>
           <p class="setting-note">With the last option the overlay stays hidden until a game starts presenting frames, and hides again about 20 seconds after it stops. Ctrl+Alt+H still hides or shows it by hand. Start with Windows only works in the installed app.</p>
-        </section>
-        <section class="settings-group">
-          <h3>Network readout</h3>
-          <label class="check-option"><input id="net-enabled" type="checkbox">Measure connection ping, jitter and loss</label>
-          <label class="select-option">Test host<input id="net-host" class="text-input" type="text" maxlength="100" value="1.1.1.1" aria-label="Host to measure"></label>
-          <p class="setting-note">Off by default. When on, SalsaStats opens a tiny connection to this host every few seconds to time it. In GeForce NOW this measures the cloud PC's internet connection, not your stream; GeForce NOW's own panel shows the stream ping. Show the readings from the Overlay tab.</p>
         </section>
         <section class="settings-group">
           <h3>Frame rate</h3>
@@ -359,16 +342,8 @@
       </section>
       <section class="osd-group" data-group="io">
         <h2 class="osd-group-title">SYSTEM I/O</h2>
-        <div class="osd-row" data-row="netIn"><span class="osd-label">Net In</span><span class="osd-value"><span data-field="netIn">--</span><span class="osd-unit">Mb</span></span></div>
-        <div class="osd-row" data-row="netOut"><span class="osd-label">Net Out</span><span class="osd-value"><span data-field="netOut">--</span><span class="osd-unit">Mb</span></span></div>
         <div class="osd-row" data-row="diskRead"><span class="osd-label">Disk Read</span><span class="osd-value"><span data-field="diskRead">--</span><span class="osd-unit">MB</span></span></div>
         <div class="osd-row" data-row="diskWrite"><span class="osd-label">Disk Write</span><span class="osd-value"><span data-field="diskWrite">--</span><span class="osd-unit">MB</span></span></div>
-      </section>
-      <section class="osd-group" data-group="network">
-        <h2 class="osd-group-title">NETWORK</h2>
-        <div class="osd-row" data-row="netPing"><span class="osd-label">Ping</span><span class="osd-value"><span data-field="netPing">--</span><span class="osd-unit">ms</span></span></div>
-        <div class="osd-row" data-row="netJitter"><span class="osd-label">Jitter</span><span class="osd-value"><span data-field="netJitter">--</span><span class="osd-unit">ms</span></span></div>
-        <div class="osd-row" data-row="netLoss"><span class="osd-label">Loss</span><span class="osd-value"><span data-field="netLoss">--</span><span class="osd-unit">%</span></span></div>
       </section>
       <section class="osd-group" data-group="fps">
         <h2 class="osd-group-title">FRAMERATE</h2>
