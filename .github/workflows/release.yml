@@ -21,6 +21,12 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Install Visual Studio Build Tools
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '2022'
+          vs-edition: 'BuildTools'
+
       - name: Install dependencies
         run: npm ci
 
