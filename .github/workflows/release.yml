@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       GYP_MSVS_VERSION: '2022'
       VisualStudioVersion: '17.0'
@@ -27,8 +27,8 @@ jobs:
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          vs-version: '2022'
-          architecture: x64
+          vsversion: '2022'
+          arch: x64
 
       - name: Upgrade node-gyp
         run: npm install -g node-gyp@latest
