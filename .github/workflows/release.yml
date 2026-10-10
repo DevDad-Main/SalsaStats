@@ -11,6 +11,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      GYP_MSVS_VERSION: '2022'
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -20,6 +22,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Configure npm for VS2022
+        run: npm config set msvs_version 2022
 
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
