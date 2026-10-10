@@ -9,10 +9,13 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 New-Item -ItemType Directory -Force $out, $cache | Out-Null
 $package = Join-Path $cache 'nvapiwrapper.zip'
 if (-not (Test-Path $package)) {
-  Invoke-WebRequest 'https://www.nuget.org/api/v2/package/NvAPIWrapper.Net/0.8.1.101' -OutFile $package -UseBasicParsing
+  (New-Object Net.WebClient).DownloadFile('https://www.nuget.org/api/v2/package/NvAPIWrapper.Net/0.8.1.101', $package)
 }
 $extract = Join-Path $cache 'nvapiwrapper'
-if (-not (Test-Path $extract)) { Expand-Archive $package $extract -Force }
+if (-not (Test-Path $extract)) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [IO.Compression.ZipFile]::ExtractToDirectory($package, $extract)
+}
 
 $library = Join-Path $extract 'lib\net45\NvAPIWrapper.dll'
 Copy-Item $library $out -Force

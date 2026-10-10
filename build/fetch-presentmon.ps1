@@ -10,9 +10,11 @@ if (Test-Path $target) { Write-Host 'PresentMon.exe already present'; exit 0 }
 
 New-Item -ItemType Directory -Force $vendor | Out-Null
 $url = "https://github.com/GameTechDev/PresentMon/releases/download/v$version/PresentMon-$version-x64.exe"
-Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing
+(New-Object Net.WebClient).DownloadFile($url, $target)
 
-$hash = (Get-FileHash $target -Algorithm SHA256).Hash
+# Plain .NET: cmdlets like Get-FileHash are missing when launched from pwsh on CI.
+$sha = [Security.Cryptography.SHA256]::Create()
+$hash = [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($target))).Replace('-', '')
 Write-Host "PresentMon $version SHA256: $hash"
 if ($expectedSha256 -and $hash -ne $expectedSha256.ToUpper()) {
   Remove-Item $target -Force
