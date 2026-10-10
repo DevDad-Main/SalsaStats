@@ -870,7 +870,6 @@
       setField('cpuClock', stats.cpu.clock === null ? 'Unavailable' : `${stats.cpu.clock} MHz`);
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
-      trackSession(stats);
       lastStats = stats;
       const io = stats.io || {};
       const oneDecimal = value => (Number.isFinite(value) ? value.toFixed(1) : '--');
@@ -1319,8 +1318,16 @@
       if (/^Key[A-Z]$/.test(event.code)) key = event.code.slice(3);
       else if (/^Digit[0-9]$/.test(event.code)) key = event.code.slice(5);
       else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(event.code)) key = event.code;
+      else {
+        key = ({
+          Space: 'Space', Tab: 'Tab', Enter: 'Return', NumpadEnter: 'Return',
+          Backspace: 'Backspace', Delete: 'Delete', Insert: 'Insert',
+          ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+          Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+        })[event.code] || null;
+      }
       if (!key) return null;
-      const modifiers = [event.ctrlKey && 'CommandOrControl', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
+      const modifiers = [event.ctrlKey && 'CommandOrControl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Super'].filter(Boolean);
       if (!modifiers.length && !key.startsWith('F')) return null;
       return [...modifiers, key].join('+');
     }
@@ -1341,25 +1348,49 @@
         });
         const text = document.createElement('span');
         text.textContent = label;
-        button.addEventListener('click', () => {
-          button.textContent = 'Press the new keys (Esc to cancel)';
-          keybindStatus.textContent = '';
+        button.addEventListener('click', async () => {
+          const started = await statsApi.setKeybindCapture(true).catch(() => false);
+          if (!started) {
+            keybindStatus.textContent = 'Could not start key capture.';
+            return;
+          }
+          button.textContent = 'Press keys now (Esc cancels)';
+          keybindStatus.textContent = 'Shortcuts are paused while capturing.';
+          list.querySelectorAll('button').forEach(candidate => { candidate.disabled = true; });
+          let captureTimer;
+          let finished = false;
+          const finishCapture = async () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(captureTimer);
+            window.removeEventListener('keydown', capture, true);
+            await statsApi.setKeybindCapture(false).catch(() => false);
+          };
           const capture = async event => {
             event.preventDefault();
             event.stopPropagation();
             if (event.key === 'Escape') {
-              window.removeEventListener('keydown', capture, true);
+              await finishCapture();
+              keybindStatus.textContent = 'Keybind change cancelled.';
               renderKeybinds(shortcuts);
               return;
             }
             const accelerator = acceleratorFromEvent(event);
-            if (!accelerator) return;
-            window.removeEventListener('keydown', capture, true);
+            if (!accelerator) {
+              keybindStatus.textContent = 'Use Ctrl, Alt, Shift, or Win with a supported key.';
+              return;
+            }
+            await finishCapture();
             const result = await statsApi.setKeybind(action, accelerator).catch(() => ({ ok: false, error: 'Could not save the keybind.' }));
             keybindStatus.textContent = result.ok ? 'Keybind saved.' : result.error;
             renderKeybinds(result.ok ? result.shortcuts : shortcuts);
           };
           window.addEventListener('keydown', capture, true);
+          captureTimer = setTimeout(async () => {
+            await finishCapture();
+            keybindStatus.textContent = 'Key capture timed out. Click a keybind to try again.';
+            renderKeybinds(shortcuts);
+          }, 20000);
         });
         item.append(button, text);
         list.append(item);
@@ -1431,96 +1462,6 @@
       syncAutoOverlay();
       if (settings.startInOverlay) setMode('overlay');
     }, 800);
-
-    // Session history: one record per game run, kept locally.
-    const SESSION_KEY = 'salsastats-sessions';
-    const IDLE_MS = 15000;
-    let session = null;
-    const loadSessions = () => {
-      try {
-        return JSON.parse(localStorage.getItem(SESSION_KEY) || '[]');
-      } catch {
-        return [];
-      }
-    };
-
-    function renderSessions() {
-      const list = document.getElementById('session-list');
-      const sessions = loadSessions();
-      list.textContent = '';
-      document.getElementById('session-empty').hidden = sessions.length > 0;
-      sessions.forEach(item => {
-        const row = document.createElement('li');
-        row.className = 'session-row';
-        const title = document.createElement('div');
-        title.className = 'session-title';
-        const name = document.createElement('strong');
-        name.textContent = item.name;
-        const when = document.createElement('span');
-        when.textContent = `${new Date(item.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} \u00b7 ${item.minutes} min`;
-        title.append(name, when);
-        const stats = document.createElement('div');
-        stats.className = 'session-stats';
-        const parts = [`Avg ${item.avgFps} FPS`, `1% low ${item.low}`];
-        if (item.peakTemp !== null) parts.push(`Peak ${item.peakTemp} C`);
-        if (item.peakVram !== null) parts.push(`VRAM ${(item.peakVram / 1024).toFixed(1)} GB`);
-        stats.textContent = parts.join('  \u00b7  ');
-        row.append(title, stats);
-        list.append(row);
-      });
-    }
-
-    function endSession() {
-      if (!session) return;
-      const done = session;
-      session = null;
-      const seconds = (done.last - done.started) / 1000;
-      if (done.count < 8 || seconds < 60) return;
-      const sessions = loadSessions();
-      sessions.unshift({
-        name: done.name,
-        date: done.started,
-        minutes: Math.max(1, Math.round(seconds / 60)),
-        avgFps: Math.round(done.fpsSum / done.count),
-        low: Math.round(done.lowSum / done.count),
-        peakTemp: done.peakTemp,
-        peakVram: done.peakVram,
-      });
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessions.slice(0, 40)));
-      renderSessions();
-    }
-
-    function trackSession(stats) {
-      const now = Date.now();
-      const fps = stats.frames?.fps;
-      if (!fps) {
-        if (session && now - session.last > IDLE_MS) endSession();
-        return;
-      }
-      const key = exeKey(fps.application);
-      if (session && session.key !== key) endSession();
-      const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
-      if (!session) {
-        const matched = matchGame(fps.application);
-        session = {
-          key, name: (matched && matched.name) || fps.displayName || fps.application,
-          started: now, last: now, count: 0, fpsSum: 0, lowSum: 0, peakTemp: null, peakVram: null,
-        };
-      }
-      session.last = now;
-      session.count += 1;
-      session.fpsSum += Math.min(fps.current, cap);
-      session.lowSum += Math.min(fps.low, cap);
-      if (Number.isFinite(stats.gpu.temperature)) session.peakTemp = Math.max(session.peakTemp ?? 0, stats.gpu.temperature);
-      if (Number.isFinite(stats.gpu.memoryUsed)) session.peakVram = Math.max(session.peakVram ?? 0, stats.gpu.memoryUsed);
-    }
-
-    document.getElementById('sessions-clear').addEventListener('click', () => {
-      localStorage.removeItem(SESSION_KEY);
-      renderSessions();
-    });
-    window.addEventListener('beforeunload', endSession);
-    renderSessions();
 
     statsApi.getKeybinds?.().then(data => data && renderKeybinds(data.shortcuts)).catch(() => {});
     document.getElementById('keybind-reset').addEventListener('click', async () => {

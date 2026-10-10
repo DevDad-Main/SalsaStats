@@ -1,5 +1,7 @@
-# SalsaStats 1.0.31
+# SalsaStats 1.0.32
 
-- Removed the duplicate overlay launch button from the Overlay tab. Use the top-bar Overlay toggle to open the overlay.
-
-If 1.0.28 is installed it cannot start, so it cannot update itself. Download and run the 1.0.29 installer manually.
+- Improved keybind capture so registered shortcuts do not intercept key selection.
+- Removed misleading network readings and recent-session history.
+- The FPS display cap does not limit the game; set an actual cap in-game or in the driver.
+No game-level FPS limiter is included.
+SalsaStats does not apply an in-game FPS limit.

@@ -87,7 +87,6 @@ function createFrameTracker() {
     const sorted = [...times].sort((a, b) => a - b);
     const slowest = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))];
     const recentMean = best.recent.reduce((sum, frame) => sum + frame.ms, 0) / best.recent.length;
-
     return {
       application: best.entry.application,
       displayName: best.entry.displayName || best.entry.application,

@@ -25,6 +25,7 @@ let updateCheckTimer;
 let statsInFlight = false;
 let shutdownTimer;
 let fatalDialogTimer;
+let keybindCaptureTimer;
 let currentMode = 'full';
 let fullscreenRestoreBounds = null;
 let pinned = false;
@@ -905,8 +906,30 @@ function registerShortcut(action) {
   }
 }
 
+function restoreShortcutsAfterCapture() {
+  clearTimeout(keybindCaptureTimer);
+  keybindCaptureTimer = null;
+  globalShortcut.unregisterAll();
+  Object.keys(shortcuts).forEach(action => {
+    if (!registerShortcut(action)) logger.writeSync('warn', 'Keybind is unavailable after capture.', { action, accelerator: shortcuts[action] });
+  });
+}
+
 function registerKeybindHandlers() {
   ipcMain.handle('keybinds:get', event => (isTrustedRenderer(event) ? { shortcuts, defaults: DEFAULT_SHORTCUTS } : null));
+
+  ipcMain.handle('keybinds:capture', (event, capturing) => {
+    if (!isTrustedRenderer(event)) return false;
+    if (capturing === true) {
+      clearTimeout(keybindCaptureTimer);
+      globalShortcut.unregisterAll();
+      keybindCaptureTimer = setTimeout(restoreShortcutsAfterCapture, 20000);
+      keybindCaptureTimer.unref();
+      return true;
+    }
+    restoreShortcutsAfterCapture();
+    return true;
+  });
 
   ipcMain.handle('keybinds:set', (event, action, accelerator) => {
     if (!isTrustedRenderer(event)) return { ok: false, error: 'Request not allowed.' };
