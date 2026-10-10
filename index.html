@@ -13,10 +13,8 @@
     <span class="brand-name">SalsaStats</span>
     <span class="brand-edition">SYSTEM MONITOR</span>
     <span class="bar-spacer"></span>
-    <span class="live-state"><span class="live-dot"></span>Live</span>
     <button class="window-action" id="mode-toggle" type="button" title="Switch to compact view">Compact view</button>
     <button class="window-action" id="overlay-toggle" type="button" title="Open overlay view">Overlay</button>
-    <button class="window-action" id="customize-toggle" type="button" title="Customize overlay">Customize</button>
     <button class="window-action" id="pin-toggle" type="button" aria-pressed="false" title="Keep this window above others">Pin</button>
     <div class="window-controls" aria-label="Window controls">
       <button class="window-control minimize" id="window-minimize" type="button" aria-label="Minimize window" title="Minimize"></button>
@@ -25,12 +23,19 @@
     </div>
   </header>
 
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" id="tab-btn-overview" role="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" id="tab-btn-overlay" role="tab" type="button" data-tab="overlay" aria-selected="false">Overlay</button>
+    <button class="tab" id="tab-btn-settings" role="tab" type="button" data-tab="settings" aria-selected="false">Settings</button>
+  </nav>
+
   <main class="dashboard">
     <aside class="update-banner" id="update-banner" role="status" aria-live="polite" hidden>
       <span class="update-message" id="update-message"></span>
       <button class="window-action" id="update-later" type="button">Later</button>
       <button class="window-action" id="update-install" type="button" hidden>Restart to update</button>
     </aside>
+    <div class="tab-panel" id="tab-overview" role="tabpanel" data-tab-panel="overview">
     <section class="intro">
       <div>
         <div class="eyebrow">Local performance</div>
@@ -90,11 +95,12 @@
         </div>
       </article>
     </section>
+    </div>
 
-    <section class="settings-panel" id="settings-panel" hidden>
+    <section class="tab-panel settings-panel" id="tab-overlay" role="tabpanel" data-tab-panel="overlay" hidden>
       <div class="settings-heading">
-        <div><div class="eyebrow">Overlay studio</div><h2>Make the OSD yours</h2></div>
-        <button class="window-action" id="settings-close" type="button" title="Close customization">Close</button>
+        <div><div class="eyebrow">Overlay studio</div><h2>Choose what the overlay shows</h2></div>
+        <button class="window-action primary" id="settings-overlay" type="button">Open overlay</button>
       </div>
       <div class="settings-layout">
         <div class="settings-controls">
@@ -142,36 +148,87 @@
               <label class="select-option">Screen corner<select id="anchor-setting"><option value="top-left">Top left</option><option value="top-right" selected>Top right</option><option value="bottom-left">Bottom left</option><option value="bottom-right">Bottom right</option></select></label>
             </div>
           </section>
-          <section class="settings-group">
-            <h3>Window behavior</h3>
-            <label class="check-option"><input id="overlay-above-games" type="checkbox">Force above fullscreen games</label>
-            <p class="setting-note">May steal focus or disrupt some games. Leave off if a game minimizes or closes.</p>
-          </section>
         </div>
         <aside class="preview-wrap">
           <div class="preview-caption"><span>Live preview</span><span>Current system readings</span></div>
           <div class="preview-stage" id="preview-stage"></div>
         </aside>
       </div>
-      <div class="settings-actions">
-        <div class="log-location">
-          <span>Log folder</span>
-          <code id="logs-path">Loading log folder</code>
-          <span id="logs-status" role="status" aria-live="polite"></span>
-        </div>
-        <button class="window-action" id="choose-logs-folder" type="button">Choose folder</button>
-        <button class="window-action" id="open-logs-folder" type="button">Open logs</button>
-        <button class="window-action" id="settings-overlay" type="button">Open overlay</button>
-      </div>
     </section>
 
-    <footer class="footer-note"><span>Stats stay on this PC</span><span>Updates every 2 seconds</span></footer>
+    <section class="tab-panel settings-panel" id="tab-settings" role="tabpanel" data-tab-panel="settings" hidden>
+      <div class="settings-heading">
+        <div><div class="eyebrow">Preferences</div><h2>App settings</h2></div>
+      </div>
+      <div class="settings-controls single">
+        <section class="settings-group">
+          <h3>Frame rate</h3>
+          <label class="select-option">Display mode<select id="fps-mode"><option value="raw">Raw render FPS</option><option value="capped">Capped to stream rate</option></select></label>
+          <label class="select-option" id="fps-cap-row">Stream cap<select id="fps-cap"><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option><option value="240">240 FPS</option></select></label>
+          <p class="setting-note">Raw shows how fast the game renders before streaming. Capped limits the numbers to your stream rate, which approximates what GeForce NOW shows. The real stream rate cannot be read, so set the cap yourself.</p>
+        </section>
+        <section class="settings-group">
+          <h3>Game names</h3>
+          <p class="setting-note">Names come from the game window automatically. Add a custom name if one looks wrong.</p>
+          <div class="game-name-form">
+            <input id="game-exe" type="text" placeholder="Executable, e.g. b1-Win64-Shipping.exe" aria-label="Executable name">
+            <input id="game-name" type="text" placeholder="Display name" aria-label="Display name" maxlength="60">
+            <button class="window-action" id="game-add" type="button">Add</button>
+          </div>
+          <ul class="game-name-list" id="game-name-list"></ul>
+        </section>
+        <section class="settings-group">
+          <h3>Window behavior</h3>
+          <label class="check-option"><input id="overlay-above-games" type="checkbox">Force above fullscreen games</label>
+          <p class="setting-note">Keeps the overlay on the highest window level. Leave off if a game minimizes or closes.</p>
+        </section>
+        <section class="settings-group">
+          <h3>Logs</h3>
+          <div class="log-location">
+            <code id="logs-path">Loading log folder</code>
+            <span id="logs-status" role="status" aria-live="polite"></span>
+          </div>
+          <div class="button-row">
+            <button class="window-action" id="choose-logs-folder" type="button">Choose folder</button>
+            <button class="window-action" id="open-logs-folder" type="button">Open logs</button>
+          </div>
+        </section>
+      </div>
+    </section>
   </main>
+
+  <section class="log-panel" id="log-panel" aria-label="Logs" hidden>
+    <div class="log-resize" id="log-resize" role="separator" aria-orientation="horizontal" aria-label="Resize logs" title="Drag to resize"></div>
+    <div class="log-header">
+      <span class="log-title">LOGS</span>
+      <select id="log-filter" aria-label="Filter log level">
+        <option value="all">All</option>
+        <option value="warn">Warnings and errors</option>
+        <option value="error">Errors only</option>
+      </select>
+      <span class="bar-spacer"></span>
+      <button class="window-action" id="log-pause" type="button" aria-pressed="false" title="Stop auto-scrolling to new lines">Pause</button>
+      <button class="window-action" id="log-copy" type="button" title="Copy the visible log lines">Copy</button>
+      <button class="window-action" id="log-clear" type="button">Clear</button>
+      <button class="window-action" id="log-open-folder" type="button">Open folder</button>
+      <button class="window-action" id="log-close" type="button" aria-label="Close logs">Close</button>
+    </div>
+    <div class="log-body" id="log-body" role="log" data-filter="all" tabindex="0"></div>
+  </section>
+
+  <footer class="status-bar" id="status-bar">
+    <button class="status-item status-button" id="log-toggle" type="button" aria-pressed="false" title="Show or hide the log panel (Ctrl+`)">Logs</button>
+    <span class="status-item" id="status-capture">Frame capture: starting</span>
+    <span class="status-item" id="status-gpu">GPU source: --</span>
+    <span class="bar-spacer"></span>
+    <span class="status-item">Stats stay on this PC</span>
+    <span class="status-item">Updates every 2 seconds</span>
+  </footer>
 
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
       <div class="osd-topbar osd-tools">
-        <span class="osd-brand">SalsaStats</span><span class="osd-live">LIVE</span><span class="osd-spacer"></span>
+        <span class="osd-brand">SalsaStats</span><span class="osd-spacer"></span>
         <button class="osd-control" id="overlay-customize" type="button">SETUP</button>
         <button class="osd-control" id="overlay-dashboard" type="button">DASHBOARD</button>
       </div>

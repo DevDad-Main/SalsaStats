@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createFrameTracker } = require('../presentmon');
+const { createFrameTracker, pickDisplayName } = require('../presentmon');
 
 const HEADER = 'Application,ProcessID,SwapChainAddress,MsBetweenPresents';
 
@@ -32,4 +32,26 @@ test('falls back to the FrameTime column', () => {
   tracker.ingestLine('Application,ProcessID,FrameTime', 0);
   for (let i = 0; i < 5; i += 1) tracker.ingestLine('game.exe,10,8', 1000 + i);
   assert.equal(tracker.snapshot(1100).current, 125);
+});
+
+test('prefers named processes and resolves unknown ones', () => {
+  const tracker = createFrameTracker();
+  tracker.ingestLine(HEADER, 0);
+  for (let i = 0; i < 20; i += 1) tracker.ingestLine('<unknown>,7,0x1,8', 1000 + i);
+  for (let i = 0; i < 5; i += 1) tracker.ingestLine('game.exe,10,0x1,16', 1000 + i);
+  assert.equal(tracker.snapshot(1100).application, 'game.exe');
+
+  assert.deepEqual(tracker.pendingLookups().sort(), ['10', '7']);
+  assert.deepEqual(tracker.pendingLookups(), []);
+  tracker.setInfo('10', { name: 'game.exe', title: 'My Game', product: 'ignored' });
+  assert.equal(tracker.snapshot(1100).displayName, 'My Game');
+  tracker.setInfo('7', { name: 'dwm.exe' });
+  assert.equal(tracker.snapshot(1100).application, 'game.exe');
+});
+
+test('picks a presentable display name with an executable fallback', () => {
+  assert.equal(pickDisplayName('b1-Win64-Shipping.exe', { title: 'Black Myth: Wukong ' }), 'Black Myth: Wukong');
+  assert.equal(pickDisplayName('b1-Win64-Shipping.exe', { title: '', product: 'Black Myth: Wukong' }), 'Black Myth: Wukong');
+  assert.equal(pickDisplayName('game.exe', { title: 'game', product: 'Unreal Engine' }), 'game.exe');
+  assert.equal(pickDisplayName('game.exe', null || {}), 'game.exe');
 });

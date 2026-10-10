@@ -25,9 +25,7 @@
     const context = chart.getContext('2d');
     const modeToggle = document.getElementById('mode-toggle');
     const overlayToggle = document.getElementById('overlay-toggle');
-    const customizeToggle = document.getElementById('customize-toggle');
     const pinToggle = document.getElementById('pin-toggle');
-    const settingsPanel = document.getElementById('settings-panel');
     const logsPath = document.getElementById('logs-path');
     const logsStatus = document.getElementById('logs-status');
     const previewStage = document.getElementById('preview-stage');
@@ -46,6 +44,9 @@
       backgroundMode: 'soft',
       anchor: 'top-right',
       overlayAboveGames: false,
+      fpsMode: 'raw',
+      fpsCap: 60,
+      gameNames: {},
     };
 
     let settings = defaultSettings;
@@ -57,6 +58,7 @@
           ...saved,
           visible: { ...defaultSettings.visible, ...saved.visible },
           colors: { ...defaultSettings.colors, ...saved.colors },
+          gameNames: { ...saved.gameNames },
         };
       }
     } catch (error) {
@@ -120,6 +122,9 @@
       document.getElementById('background-setting').value = settings.backgroundMode;
       document.getElementById('anchor-setting').value = settings.anchor;
       document.getElementById('overlay-above-games').checked = settings.overlayAboveGames === true;
+      document.getElementById('fps-mode').value = settings.fpsMode;
+      document.getElementById('fps-cap').value = String(settings.fpsCap);
+      document.getElementById('fps-cap-row').hidden = settings.fpsMode !== 'capped';
       drawOsdCharts();
     }
 
@@ -168,6 +173,53 @@
       saveSettings();
       statsApi.setOverlayAboveGames(settings.overlayAboveGames);
     });
+    document.getElementById('fps-mode').addEventListener('change', event => {
+      settings.fpsMode = event.target.value === 'capped' ? 'capped' : 'raw';
+      saveSettings();
+      applySettings();
+      renderFrames(lastFrames);
+    });
+    document.getElementById('fps-cap').addEventListener('change', event => {
+      settings.fpsCap = Number(event.target.value) || 60;
+      saveSettings();
+      renderFrames(lastFrames);
+    });
+
+    const gameNameList = document.getElementById('game-name-list');
+    function renderGameNames() {
+      gameNameList.textContent = '';
+      Object.entries(settings.gameNames).forEach(([exe, name]) => {
+        const item = document.createElement('li');
+        const label = document.createElement('span');
+        label.textContent = `${exe} \u2192 ${name}`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'window-action';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', () => {
+          delete settings.gameNames[exe];
+          saveSettings();
+          renderGameNames();
+          renderFrames(lastFrames);
+        });
+        item.append(label, remove);
+        gameNameList.append(item);
+      });
+    }
+    document.getElementById('game-add').addEventListener('click', () => {
+      const exeInput = document.getElementById('game-exe');
+      const nameInput = document.getElementById('game-name');
+      const exe = exeInput.value.trim().toLowerCase();
+      const name = nameInput.value.trim().slice(0, 60);
+      if (!exe || !name) return;
+      settings.gameNames[exe] = name;
+      exeInput.value = '';
+      nameInput.value = '';
+      saveSettings();
+      renderGameNames();
+      renderFrames(lastFrames);
+    });
+    renderGameNames();
 
     function formatBytes(bytes) {
       if (!Number.isFinite(bytes) || bytes <= 0) return '--';
@@ -243,9 +295,20 @@
     }
 
     var frametimes = [];
+    var lastFrames = null;
 
     function renderFrames(frames) {
-      const fps = frames?.fps;
+      lastFrames = frames;
+      const raw = frames?.fps;
+      const cap = settings.fpsMode === 'capped' ? settings.fpsCap : Infinity;
+      const fps = raw && {
+        ...raw,
+        name: settings.gameNames[raw.application.toLowerCase()] || raw.displayName || raw.application,
+        current: Math.min(raw.current, cap),
+        average: Math.min(raw.average, cap),
+        low: Math.min(raw.low, cap),
+        frametimes: raw.frametimes.map(ms => Math.max(ms, 1000 / cap)),
+      };
       frametimes = fps ? fps.frametimes : [];
       const show = value => (fps ? String(value) : '--');
       setField('fpsCurrent', show(fps?.current));
@@ -257,9 +320,10 @@
 
       let tag = 'No capture source';
       let note = frames?.message || '';
+      const modeLabel = Number.isFinite(cap) ? `capped at ${cap} FPS` : 'raw render rate';
       if (fps) {
-        tag = fps.application;
-        note = `Capturing ${fps.application}.`;
+        tag = fps.name;
+        note = `Measuring ${fps.name} (${modeLabel}).`;
       } else if (frames?.status === 'active') {
         tag = 'Waiting for a game';
         note = 'Start a game to see its frame rate.';
@@ -269,8 +333,9 @@
       }
       document.getElementById('fps-tag').textContent = tag;
       document.getElementById('fps-note').textContent = note;
-      setField('fpsSource', fps ? fps.application : tag);
-      document.querySelector('[data-row="fpsNote"]').textContent = fps ? `Capturing ${fps.application}` : (note || 'Game capture unavailable');
+      setField('fpsSource', fps ? fps.name : tag);
+      const noteText = fps ? `Measuring ${fps.name} · ${modeLabel}` : (note || 'Game capture unavailable');
+      document.querySelectorAll('[data-row="fpsNote"]').forEach(element => { element.textContent = noteText; });
     }
 
     function drawFrameLine(canvas, values, color) {
@@ -356,6 +421,9 @@
       setField('cpuPower', 'Unavailable');
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
+      document.getElementById('status-gpu').textContent = `GPU source: ${stats.gpu.telemetrySource}`;
+      const captureLabels = { capturing: 'capturing', active: 'waiting for a game', starting: 'starting', error: 'needs administrator', missing: 'unavailable', off: 'off' };
+      document.getElementById('status-capture').textContent = `Frame capture: ${captureLabels[stats.frames?.status] || 'unavailable'}`;
 
       document.getElementById('sample-time').textContent = `Updated ${new Date(stats.sampledAt).toLocaleTimeString()}`;
       samples.push({ cpu: stats.cpu.usage, gpu: stats.gpu.usage });
@@ -416,9 +484,139 @@
 
     function openSettings() {
       setMode('full');
-      settingsPanel.hidden = false;
-      requestAnimationFrame(() => settingsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      selectTab('overlay');
     }
+
+    function selectTab(name) {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.setAttribute('aria-selected', String(tab.dataset.tab === name));
+      });
+      document.querySelectorAll('[data-tab-panel]').forEach(panel => {
+        panel.hidden = panel.dataset.tabPanel !== name;
+      });
+      requestAnimationFrame(() => {
+        drawChart();
+        drawOsdCharts();
+      });
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => selectTab(tab.dataset.tab));
+    });
+
+    const logPanel = document.getElementById('log-panel');
+    const logBody = document.getElementById('log-body');
+    const logToggle = document.getElementById('log-toggle');
+    const MAX_LOG_LINES = 500;
+    let logOffset = null;
+    let logTimer = null;
+    let logPaused = false;
+
+    function appendLogEntries(entries) {
+      if (!entries.length) return;
+      const stickToBottom = !logPaused && logBody.scrollTop + logBody.clientHeight >= logBody.scrollHeight - 24;
+      const fragment = document.createDocumentFragment();
+      entries.forEach(entry => {
+        const level = entry.level === 'fatal' ? 'error' : (entry.level || 'info');
+        const line = document.createElement('div');
+        line.className = `log-line level-${level}`;
+        const time = entry.time ? new Date(entry.time).toLocaleTimeString() : '';
+        const parts = [
+          ['log-time', time],
+          ['log-level', String(entry.level || 'info').toUpperCase()],
+          ['log-message', entry.message || ''],
+        ];
+        if (entry.details) parts.push(['log-details', entry.details]);
+        parts.forEach(([className, text]) => {
+          const span = document.createElement('span');
+          span.className = className;
+          span.textContent = text;
+          line.append(span);
+        });
+        fragment.append(line);
+      });
+      logBody.append(fragment);
+      while (logBody.childElementCount > MAX_LOG_LINES) logBody.firstElementChild.remove();
+      if (stickToBottom) logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    async function pollLogs() {
+      try {
+        const result = await statsApi.readLogTail(logOffset);
+        if (!result) return;
+        logOffset = result.offset;
+        appendLogEntries(result.entries);
+      } catch {
+        // The next poll will retry.
+      }
+    }
+
+    function setLogOpen(open) {
+      logPanel.hidden = !open;
+      logToggle.setAttribute('aria-pressed', String(open));
+      localStorage.setItem('salsastats-log-open', open ? '1' : '0');
+      clearInterval(logTimer);
+      logTimer = null;
+      if (open) {
+        pollLogs();
+        logTimer = setInterval(pollLogs, 1500);
+      }
+      requestAnimationFrame(refreshCharts);
+    }
+
+    logToggle.addEventListener('click', () => setLogOpen(logPanel.hidden));
+    document.getElementById('log-close').addEventListener('click', () => setLogOpen(false));
+    document.getElementById('log-clear').addEventListener('click', () => { logBody.textContent = ''; });
+    document.getElementById('log-pause').addEventListener('click', event => {
+      logPaused = !logPaused;
+      event.currentTarget.setAttribute('aria-pressed', String(logPaused));
+      event.currentTarget.textContent = logPaused ? 'Resume' : 'Pause';
+      if (!logPaused) logBody.scrollTop = logBody.scrollHeight;
+    });
+    document.getElementById('log-copy').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const text = [...logBody.children]
+        .filter(line => getComputedStyle(line).display !== 'none')
+        .map(line => [...line.children].map(part => part.textContent).filter(Boolean).join(' '))
+        .join('\n');
+      const copied = text ? await statsApi.copyText(text).catch(() => false) : false;
+      button.textContent = copied ? 'Copied' : 'Nothing to copy';
+      setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+    });
+    document.getElementById('log-open-folder').addEventListener('click', () => statsApi.openLogDirectory());
+    document.getElementById('log-filter').addEventListener('change', event => {
+      logBody.dataset.filter = event.target.value;
+      logBody.scrollTop = logBody.scrollHeight;
+    });
+    window.addEventListener('keydown', event => {
+      if (event.ctrlKey && event.key === '`') {
+        event.preventDefault();
+        setLogOpen(logPanel.hidden);
+      }
+    });
+
+    const savedLogHeight = Number(localStorage.getItem('salsastats-log-height'));
+    if (savedLogHeight >= 120) document.documentElement.style.setProperty('--log-height', `${savedLogHeight}px`);
+    document.getElementById('log-resize').addEventListener('pointerdown', event => {
+      const handle = event.currentTarget;
+      handle.setPointerCapture(event.pointerId);
+      const startY = event.clientY;
+      const startHeight = logPanel.getBoundingClientRect().height;
+      const move = moveEvent => {
+        const height = Math.max(120, Math.min(window.innerHeight * 0.7, startHeight + startY - moveEvent.clientY));
+        document.documentElement.style.setProperty('--log-height', `${Math.round(height)}px`);
+        refreshCharts();
+      };
+      const finish = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', finish);
+        localStorage.setItem('salsastats-log-height', String(Math.round(logPanel.getBoundingClientRect().height)));
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', finish);
+    });
+
+    if (localStorage.getItem('salsastats-log-open') === '1') setLogOpen(true);
 
     function renderUpdateState(state) {
       if (!state || ['idle', 'checking', 'current'].includes(state.status)) {
@@ -489,14 +687,9 @@
       setMode(document.body.classList.contains('compact') ? 'full' : 'compact');
     });
     overlayToggle.addEventListener('click', () => setMode('overlay'));
-    customizeToggle.addEventListener('click', openSettings);
     document.getElementById('overlay-customize').addEventListener('click', openSettings);
     document.getElementById('overlay-dashboard').addEventListener('click', () => setMode('full'));
-    document.getElementById('settings-close').addEventListener('click', () => { settingsPanel.hidden = true; });
-    document.getElementById('settings-overlay').addEventListener('click', () => {
-      settingsPanel.hidden = true;
-      setMode('overlay');
-    });
+    document.getElementById('settings-overlay').addEventListener('click', () => setMode('overlay'));
 
     pinToggle.addEventListener('click', () => {
       const pinned = pinToggle.getAttribute('aria-pressed') !== 'true';

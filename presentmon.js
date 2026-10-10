@@ -1,11 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
 
 const WINDOW_MS = 30000;
 const RECENT_MS = 2000;
 const MIN_RECENT_FRAMES = 3;
 const HISTORY_FRAMES = 120;
+const UNKNOWN_APP = '<unknown>';
 const IGNORED_APPS = new Set([
   'dwm.exe', 'explorer.exe', 'salsastats.exe', 'electron.exe', 'searchhost.exe',
   'startmenuexperiencehost.exe', 'shellexperiencehost.exe', 'textinputhost.exe', 'presentmon.exe',
@@ -50,7 +51,7 @@ function createFrameTracker() {
     const pid = fields[columns.processId];
     let entry = processes.get(pid);
     if (!entry) {
-      entry = { application: fields[columns.application], frames: [] };
+      entry = { pid, application: fields[columns.application], frames: [], lookedUp: false };
       processes.set(pid, entry);
     }
     entry.frames.push({ time: now, ms });
@@ -60,6 +61,7 @@ function createFrameTracker() {
 
   function snapshot(now = Date.now()) {
     let best = null;
+    let bestUnknown = null;
     for (const [pid, entry] of processes) {
       const cutoff = now - WINDOW_MS;
       while (entry.frames.length && entry.frames[0].time < cutoff) entry.frames.shift();
@@ -69,10 +71,15 @@ function createFrameTracker() {
       }
       if (IGNORED_APPS.has(String(entry.application).toLowerCase())) continue;
       const recent = entry.frames.filter(frame => frame.time >= now - RECENT_MS);
-      if (recent.length >= MIN_RECENT_FRAMES && (!best || recent.length > best.recent.length)) {
+      if (recent.length < MIN_RECENT_FRAMES) continue;
+      // Unnamed processes only win when no named process is presenting.
+      if (entry.application === UNKNOWN_APP) {
+        if (!bestUnknown || recent.length > bestUnknown.recent.length) bestUnknown = { entry, recent };
+      } else if (!best || recent.length > best.recent.length) {
         best = { entry, recent };
       }
     }
+    best = best || bestUnknown;
     if (!best) return null;
 
     const times = best.entry.frames.map(frame => frame.ms);
@@ -83,6 +90,7 @@ function createFrameTracker() {
 
     return {
       application: best.entry.application,
+      displayName: best.entry.displayName || best.entry.application,
       current: Math.round(1000 / recentMean),
       average: Math.round(1000 / mean),
       low: Math.round(1000 / slowest),
@@ -90,7 +98,57 @@ function createFrameTracker() {
     };
   }
 
-  return { ingestLine, snapshot };
+  function pendingLookups() {
+    const pids = [];
+    for (const [pid, entry] of processes) {
+      if (!entry.lookedUp && /^\d+$/.test(pid) && !IGNORED_APPS.has(String(entry.application).toLowerCase())) {
+        entry.lookedUp = true;
+        pids.push(pid);
+      }
+    }
+    return pids;
+  }
+
+  function setInfo(pid, info) {
+    const entry = processes.get(String(pid));
+    if (!entry || !info) return;
+    if (entry.application === UNKNOWN_APP && info.name) entry.application = info.name;
+    entry.displayName = pickDisplayName(entry.application, info);
+  }
+
+  return { ingestLine, snapshot, pendingLookups, setInfo };
+}
+
+const GENERIC_PRODUCTS = new Set([
+  'unreal engine', 'unity', 'microsoft\u00ae windows\u00ae operating system', 'microsoft windows operating system',
+]);
+
+// Prefers a readable window title or product name over the raw executable name.
+function pickDisplayName(application, info = {}) {
+  const exe = String(application).toLowerCase();
+  const base = exe.replace(/\.exe$/, '');
+  const usable = value => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    const lower = text.toLowerCase();
+    const valid = text.length >= 3 && text.length <= 60 && lower !== exe && lower !== base && !GENERIC_PRODUCTS.has(lower);
+    return valid ? text : null;
+  };
+  return usable(info.title) || usable(info.product) || application;
+}
+
+function lookUpProcessInfo(pid) {
+  const script = "$ErrorActionPreference='Stop'; $p=Get-Process -Id " + pid
+    + "; $product=$null; try { $product=$p.MainModule.FileVersionInfo.ProductName } catch {}"
+    + "; [pscustomobject]@{name=($p.ProcessName+'.exe'); title=$p.MainWindowTitle; product=$product} | ConvertTo-Json -Compress";
+  return new Promise(resolve => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
+      try {
+        resolve(error ? null : JSON.parse(String(stdout).trim()));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
 }
 
 function createPresentMonCapture({ exePath, logger } = {}) {
@@ -158,6 +216,9 @@ function createPresentMonCapture({ exePath, logger } = {}) {
 
   function getSnapshot() {
     const fps = status === 'active' ? tracker.snapshot() : null;
+    tracker.pendingLookups().forEach(pid => {
+      lookUpProcessInfo(pid).then(info => tracker.setInfo(pid, info));
+    });
     return { status: fps ? 'capturing' : status, message, fps };
   }
 
@@ -172,4 +233,4 @@ function resolvePresentMonPath(resourcesPath, baseDirectory) {
   return candidates.find(candidate => fs.existsSync(candidate)) || null;
 }
 
-module.exports = { createFrameTracker, createPresentMonCapture, resolvePresentMonPath };
+module.exports = { createFrameTracker, createPresentMonCapture, resolvePresentMonPath, pickDisplayName };

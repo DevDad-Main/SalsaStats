@@ -1,5 +1,6 @@
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
+const fs = require('node:fs');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
@@ -130,7 +131,61 @@ function isTrustedRenderer(event) {
   return mainWindow && !mainWindow.isDestroyed() && event.sender === mainWindow.webContents;
 }
 
+function parseLogLine(line) {
+  try {
+    const record = JSON.parse(line);
+    const details = record.details === undefined ? '' : JSON.stringify(record.details).slice(0, 400);
+    return { time: record.timestamp, level: record.level, message: record.message, details };
+  } catch {
+    return { time: null, level: 'info', message: line, details: '' };
+  }
+}
+
+// Returns whole log lines written after `offset` (or the recent tail on the first call).
+function readLogTail(offset) {
+  const MAX_BYTES = 256 * 1024;
+  const INITIAL_BYTES = 64 * 1024;
+  let size;
+  try {
+    size = fs.statSync(logger.getLogFilePath()).size;
+  } catch {
+    return { offset: 0, entries: [] };
+  }
+  const resume = Number.isFinite(offset) && offset >= 0 && offset <= size;
+  let start = resume ? offset : Math.max(0, size - INITIAL_BYTES);
+  if (size - start > MAX_BYTES) start = size - MAX_BYTES;
+  if (size === start) return { offset: size, entries: [] };
+
+  const buffer = Buffer.alloc(size - start);
+  const descriptor = fs.openSync(logger.getLogFilePath(), 'r');
+  try {
+    fs.readSync(descriptor, buffer, 0, buffer.length, start);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  const lastNewline = buffer.lastIndexOf(0x0a);
+  if (lastNewline < 0) return { offset: start, entries: [] };
+
+  let lines = buffer.subarray(0, lastNewline + 1).toString('utf8').split('\n').filter(Boolean);
+  if (!resume && start > 0) lines = lines.slice(1);
+  return { offset: start + lastNewline + 1, entries: lines.map(parseLogLine) };
+}
+
 function registerLogHandlers() {
+  ipcMain.handle('clipboard:write', (event, text) => {
+    if (!isTrustedRenderer(event) || typeof text !== 'string') return false;
+    clipboard.writeText(text.slice(0, 1024 * 1024));
+    return true;
+  });
+  ipcMain.handle('logs:tail', (event, offset) => {
+    if (!isTrustedRenderer(event)) return null;
+    try {
+      return readLogTail(offset);
+    } catch (error) {
+      return { offset: 0, entries: [] };
+    }
+  });
+
   ipcMain.handle('logs:get-directory', event => {
     if (!isTrustedRenderer(event)) return null;
     return { directory: logger.getDirectory(), logFile: logger.getLogFilePath() };
@@ -319,6 +374,8 @@ function applyWindowStacking() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const overlay = currentMode === 'overlay';
   const forceAboveGames = overlay && overlayAboveGames;
+  // A focusable overlay steals activation, which makes fullscreen games minimise.
+  mainWindow.setFocusable(!overlay);
   mainWindow.setAlwaysOnTop(overlay || pinned, forceAboveGames ? 'screen-saver' : 'floating');
   if (forceAboveGames) mainWindow.moveTop();
 }

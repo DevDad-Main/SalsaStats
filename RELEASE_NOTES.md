@@ -1,16 +1,18 @@
-# SalsaStats 1.0.19
+# SalsaStats 1.0.20
 
 ## What's new
 
-- Replace the experimental C++ NVAPI addon with a small out-of-process helper built on NvAPIWrapper, so GPU temperature, clock and memory readings can no longer crash the app. It runs automatically and fills any gaps left by other GPU sources.
-- Add game frame rate capture (FPS, average and 1% low, with live graphs) using PresentMon. This needs administrator rights or membership of the "Performance Log Users" group; the dashboard explains when it is unavailable.
-- Fix a crash when dragging the overlay window.
-- Refreshed interface with a cooler palette, larger text and clearer cards.
-- Remove the NVAPI toggle from Setup now that the helper is safe to run by default.
-- Fix the Windows build scripts so release builds succeed in CI (1.0.18 was never published).
+- Tabbed dashboard: Overview, Overlay and Settings, with a cleaner layout.
+- Docked log panel at the bottom of the window with filter, copy, pause, clear and open-folder buttons, plus a bottom status bar showing frame capture and GPU source status. Toggle it with the Logs button or Ctrl+`.
+- Choose between raw render FPS and FPS capped to your stream rate (30-240).
+- The overlay and dashboard now show which game is being measured, using its window title or product name, falling back to the executable name. Custom names can be set in Settings.
+- Fix games being minimised by the overlay: the overlay no longer takes keyboard focus.
+- Fix frame capture picking up unnamed processes; process names are now resolved.
+- Fix the overlay FPS note showing "Game capture unavailable" while capturing.
+- Remove the "Live" indicators.
 
 ## Install and update
 
-Download `SalsaStats-1.0.19-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
+Download `SalsaStats-1.0.20-x64-Setup.exe` and run it to install for the current user; administrator elevation is not requested.
 
 The installer is unsigned. SmartScreen or managed-device application-control policies may still warn or block it.

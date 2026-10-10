@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('salsaStats', {
   getLogDirectory: () => ipcRenderer.invoke('logs:get-directory'),
   chooseLogDirectory: () => ipcRenderer.invoke('logs:choose-directory'),
   openLogDirectory: () => ipcRenderer.invoke('logs:open-directory'),
+  readLogTail: offset => ipcRenderer.invoke('logs:tail', offset),
+  copyText: text => ipcRenderer.invoke('clipboard:write', text),
   reportError: (message, details, fatal = false) => ipcRenderer.send('renderer:error', { message, details, fatal }),
   getUpdateState: () => ipcRenderer.invoke('updates:get-state'),
   installUpdate: () => ipcRenderer.send('updates:install'),
