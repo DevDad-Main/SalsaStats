@@ -18,6 +18,8 @@ const OVERLAY_Z_ORDER_INTERVAL_MS = 1000;
 const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+// How long SalsaStats must stay up before a SalsaNOW session counts as a good run.
+const STARTUP_STABLE_RUN_MS = 10 * 60 * 1000;
 const readStats = createStatsReader();
 const readNetUsage = createNetUsageReader();
 const readStream = createStreamLogReader(undefined, undefined, status => {
@@ -33,6 +35,7 @@ let statsInFlight = false;
 let shutdownTimer;
 let fatalDialogTimer;
 let keybindCaptureTimer;
+let startupStableTimer;
 let currentMode = 'full';
 let pinned = false;
 let overlayAboveGames = false;
@@ -75,11 +78,30 @@ function stopBackgroundWork() {
   frameCapture?.stop();
   nvidiaPerf.stop();
   clearTimeout(statsTimer);
+  clearTimeout(startupStableTimer);
   clearInterval(overlayZOrderTimer);
   clearInterval(updateCheckTimer);
   statsTimer = null;
+  startupStableTimer = null;
   overlayZOrderTimer = null;
   updateCheckTimer = null;
+}
+
+// The SalsaNOW startup line counts sessions where SalsaStats was launched but ended early, and
+// stops launching it after a few in a row, so a broken build can never lock anyone out of their
+// session. Only a run that stays up this long resets that counter; anything less (a crash, a fatal
+// error or a short session) keeps counting towards the breaker.
+function scheduleStartupStableClear() {
+  clearTimeout(startupStableTimer);
+  startupStableTimer = null;
+  if (!app.isPackaged) return;
+  const counterPath = startupBatch.defaultCounterPath();
+  if (!startupBatch.readFailedStarts(counterPath)) return;
+  startupStableTimer = setTimeout(() => {
+    if (isQuitting || isShuttingDown) return;
+    startupBatch.clearFailedStarts(counterPath);
+    logger.writeSync('info', 'SalsaStats stayed up, so the SalsaNOW startup breaker was reset.');
+  }, STARTUP_STABLE_RUN_MS);
 }
 
 function requestShutdown(exitCode = 0) {
@@ -129,6 +151,7 @@ function showFatalError(message, details, { canReload = false } = {}) {
       fatalDialogOpen = false;
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
       isQuitting = false;
+      scheduleStartupStableClear();
       if (!statsInFlight) sampleStats();
       return;
     }
@@ -1092,6 +1115,12 @@ app.whenReady().then(() => {
   registerShortcuts();
   registerKeybindHandlers();
   sampleStats();
+
+  // Say why automatic start is off, if the safety net switched itself off last session.
+  if (app.isPackaged && startupBatch.getStartupStatus().paused) {
+    logger.writeSync('warn', 'SalsaNOW automatic start is paused after several sessions that ended early. It stays off until it is switched on again in Settings.');
+  }
+  scheduleStartupStableClear();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

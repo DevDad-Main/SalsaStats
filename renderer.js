@@ -973,7 +973,7 @@
       'fps-mode': 'Raw shows the true render rate. Capped limits the displayed number to compare with your stream.',
       'fps-cap': 'Highest FPS value SalsaStats will display. It does not limit the game.',
       'login-enabled': 'Starts SalsaStats when you sign in to Windows. Installed app only. Does not carry over between SalsaNOW sessions.',
-      'salsanow-startup': 'Adds SalsaStats to the SalsaNOW startup batch file (I:\\Apps\\SalsaNOW\\StartupBatch.bat) so it starts with every session. Your other commands in that file are kept.',
+      'salsanow-startup': 'Adds SalsaStats to the SalsaNOW startup batch file (I:\\Apps\\SalsaNOW\\StartupBatch.bat) so it starts with every session. Your other commands in that file are kept. If SalsaStats ever ends early in several sessions in a row, the line pauses itself so your session still opens, and you can resume it here.',
       'start-overlay': 'Skips the dashboard and opens the overlay at launch.',
       'auto-overlay': 'Keeps the overlay hidden until a game starts presenting frames.',
       'overlay-above-games': 'Forces the overlay above fullscreen games. Turn it off if a game minimizes.',
@@ -1657,15 +1657,20 @@
     });
     const salsaBox = document.getElementById('salsanow-startup');
     const salsaStatus = document.getElementById('salsanow-status');
+    const salsaResumeRow = document.getElementById('salsanow-resume-row');
+    const salsaResume = document.getElementById('salsanow-resume');
     const salsaNote = salsaStatus.textContent;
     statsApi.getSalsaStartup?.().then(status => {
       salsaBox.checked = status?.enabled === true;
+      salsaResumeRow.hidden = !(status?.available && status?.packaged && status?.enabled && status?.paused);
       if (!status?.available) {
         salsaBox.disabled = true;
         salsaStatus.textContent = 'The SalsaNOW folder (I:\\Apps\\SalsaNOW) was not found. This option only works inside a SalsaNOW session.';
       } else if (!status.packaged) {
         salsaBox.disabled = true;
         salsaStatus.textContent = 'This option only works in the installed app.';
+      } else if (status.paused) {
+        salsaStatus.textContent = 'Automatic start paused itself. SalsaStats ended early in a few sessions in a row, so the startup line is being skipped to keep your session reachable. It cannot lock you out: the rest of the batch file still runs. Press Resume to try again, or leave it paused and open SalsaStats by hand.';
       }
     }).catch(() => { salsaBox.disabled = true; });
     salsaBox.addEventListener('change', async () => {
@@ -1675,9 +1680,21 @@
         salsaStatus.textContent = result?.error || 'Unable to update the startup batch file.';
         return;
       }
+      salsaResumeRow.hidden = true;
       salsaStatus.textContent = result.enabled
-        ? 'Added. SalsaStats will start the next time a SalsaNOW session begins. Your other startup commands were left as they were.'
+        ? 'Added. SalsaStats will start the next time a SalsaNOW session begins. If it ever ends early several sessions in a row it will pause itself, so your session always still opens. Your other startup commands were left as they were.'
         : `Removed. ${salsaNote}`;
+    });
+    salsaResume.addEventListener('click', async () => {
+      salsaResume.disabled = true;
+      const result = await statsApi.setSalsaStartup(true).catch(() => ({ ok: false, error: 'Unable to update the startup batch file.' }));
+      salsaResume.disabled = false;
+      if (!result?.ok) {
+        salsaStatus.textContent = result?.error || 'Unable to update the startup batch file.';
+        return;
+      }
+      salsaResumeRow.hidden = true;
+      salsaStatus.textContent = 'Resumed. SalsaStats will start with the next session again, and will pause itself again if it ends early several times in a row.';
     });
     setTimeout(() => {
       syncAutoOverlay();

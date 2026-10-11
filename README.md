@@ -129,16 +129,41 @@ Turn the **STREAM** group on in **Customize overlay → GeForce NOW stream**. It
 
 A SalsaNOW session starts from a clean Windows each time, so the normal **Start SalsaStats with Windows** option doesn't carry over. SalsaNOW instead runs a batch file at the start of every session, `I:\Apps\SalsaNOW\StartupBatch.bat`, if one exists ([SalsaNOW documentation](https://documentation.salsanowfiles.work/Features/StartupBatchScript/)).
 
-Turn on **Settings → Start SalsaStats when SalsaNOW starts** and SalsaStats adds a single marked line to that file:
+Turn on **Settings → Start SalsaStats when SalsaNOW starts** and SalsaStats adds a small guarded block to the end of that file:
 
 ```bat
 REM >>> SalsaStats (managed by SalsaStats, remove with the setting)
-start "" "C:\Users\kiosk\AppData\Local\Programs\salsastats\SalsaStats.exe"
+setlocal
+set "SS_EXE=C:\Users\kiosk\AppData\Local\Programs\salsastats\SalsaStats.exe"
+set "SS_COUNT=I:\Apps\SalsaNOW\SalsaStatsFailures.txt"
+if not exist "%SS_EXE%" goto salsastats_end
+set /a SS_N=0
+if exist "%SS_COUNT%" set /p SS_N=<"%SS_COUNT%"
+if %SS_N% GEQ 3 goto salsastats_end
+set /a SS_N+=1
+2>nul >"%SS_COUNT%" echo %SS_N%
+start "" "%SS_EXE%"
+:salsastats_end
+endlocal
 REM <<< SalsaStats
 ```
 
 > [!NOTE]
 > Anything else already in `StartupBatch.bat` is left exactly as it was, and a copy of the original is saved once as `StartupBatch.bat.salsastats-backup` before the first change. Turning the option off removes only the SalsaStats lines. The option only works in the installed app, inside a SalsaNOW session.
+
+#### The safety net
+
+The block is built so that a broken SalsaStats can never stop you getting into your session:
+
+- The block only ever starts SalsaStats in the background and never stops the batch. If anything about it goes wrong, the rest of the file still runs and the session still opens.
+- If the exe isn't there (for example after a reset), the block does nothing at all.
+- The block counts sessions in `I:\Apps\SalsaNOW\SalsaStatsFailures.txt`, the folder that survives between sessions. The count goes up by one each session where SalsaStats was launched but was gone again within 10 minutes, which is what a session-crashing bug looks like from the outside.
+- After **three** early exits in a row the block simply stops launching SalsaStats, so the next session opens normally. There is nothing left to crash.
+- The first session where SalsaStats stays up for 10 minutes resets the count, so ordinary use never trips it.
+- When it has paused itself, the app says so in **Settings**, with a **Resume automatic start** button. Switching the option off and on does the same thing, or you can delete `SalsaStatsFailures.txt` by hand.
+
+> [!TIP]
+> If you ever suspect the app and want in quickly before anything else: open a session, and the block is already skipping SalsaStats (three strikes). If you need it out of the way for just this session, delete the marked block from `I:\Apps\SalsaNOW\StartupBatch.bat` — you don't need to be in a session for long to do that.
 
 ## Frame rate
 
@@ -166,7 +191,7 @@ The optional **Frame analysis** readings (CPU and GPU busy time, click-to-photon
 - **The STREAM group isn't showing.** It only appears on a GeForce NOW session. Untick **Hide readings that are unavailable** to see every row, and check the log panel for the line "GeForce NOW stream log status changed".
 - **Round trip and scores vanished.** See the warning in [Stream readout](#stream-readout). NVIDIA stops logging them after about 35 minutes.
 - **Closing the window didn't quit.** That's the tray behaviour. Use **Quit** from the tray icon's menu.
-- **SalsaStats doesn't open with SalsaNOW.** Turn on **Start SalsaStats when SalsaNOW starts** in Settings, then start a new session. The option is greyed out if `I:\Apps\SalsaNOW` isn't found or you're running from source.
+- **SalsaStats doesn't open with SalsaNOW.** Turn on **Start SalsaStats when SalsaNOW starts** in Settings, then start a new session. The option is greyed out if `I:\Apps\SalsaNOW` isn't found or you're running from source. If it paused itself after several early exits, Settings shows a **Resume automatic start** button; deleting `I:\Apps\SalsaNOW\SalsaStatsFailures.txt` does the same thing.
 
 The log panel has filter, copy, pause and clear buttons, which makes it easy to paste into a bug report. Logs live in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
 

@@ -1,3 +1,9 @@
+# SalsaStats 1.0.46
+
+- The SalsaNOW automatic start now has a proper safety net, so a broken build can never lock anyone out of their session. The startup block counts sessions where SalsaStats was launched but was gone again within 10 minutes, in a file that lives next to the batch file (`I:\Apps\SalsaNOW\SalsaStatsFailures.txt`, the folder that survives between sessions). After three early exits in a row it stops launching SalsaStats on its own, so the next session just opens. A session where SalsaStats stays up for 10 minutes resets the count.
+- Settings shows when automatic start has paused itself, explains why, and offers a **Resume automatic start** button. Switching the option off and on resets the count as well.
+- Fixed the safety net of 1.0.45 never working: the counter path was missing, so the generated batch line could write a file named "undefined" and the breaker could never trip, and nothing ever reset the count after a good run.
+
 # SalsaStats 1.0.45
 
 - Added Settings > Start SalsaStats when SalsaNOW starts. It adds one marked line to SalsaNOW's own startup batch file (I:\Apps\SalsaNOW\StartupBatch.bat), keeps everything else in that file, and saves a one-time backup of the original.
