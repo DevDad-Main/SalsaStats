@@ -79,7 +79,9 @@ On a GeForce NOW session SalsaStats reads the NVIDIA streamer logs on the cloud 
 - **Weakest link**: the lowest scoring part of the stream (GPU, server, visual, decoder, downlink lag, congestion or uplink), shown only when it drops below 90%
 - **Stream resolution**, **Bitrate limit**, **Codec**, **Client / HDR** and **Stream features** (Reflex, cloud G-Sync, L4S)
 
-These values describe the session as the cloud PC sees it. Raw packet and frame loss counts, Wi-Fi details and live bandwidth are measured on your own device and are not available to SalsaStats. The group is hidden outside a GeForce NOW session.
+These values describe the session as the cloud PC sees it. Raw packet and frame loss counts, Wi-Fi details and live ping are measured on your own device and are not available to SalsaStats. The group is hidden outside a GeForce NOW session.
+
+**Why some stream readings stop updating.** NVIDIA stops writing the round trip and score lines to the streamer log after roughly 35 minutes of a session. Round trip, quality, scores, health, weakest link, stream FPS and loss dips are therefore only live early in a session. Once they are more than 30 seconds old they are hidden, round trip stays on screen as its last known value with its age for 10 minutes, and **Data age** shows how old they are. Codec, resolution, client details and features are written once at the start and stay. **Bandwidth used** comes from the network adapter and stays live. Stream FPS and loss dips are estimates, not packet counts.
 
 ## Frame rate
 

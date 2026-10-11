@@ -1,3 +1,9 @@
+# SalsaStats 1.0.43
+
+- Added hover tooltips to every overlay reading and control in Customize overlay and Settings.
+- Readings that are estimates or only live early in a session now carry a small tag (Early session, Estimate, Needs capture, Session only), and the GeForce NOW stream section explains why some values stop updating.
+- The last known round trip is now shown for 10 minutes after NVIDIA stops logging it, then hidden. Data age is off by default.
+
 # SalsaStats 1.0.42
 
 - Bandwidth used now reads only the GeForce NOW STREAM network adapter, so game-file and other rig traffic no longer inflate it.

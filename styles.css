@@ -361,6 +361,7 @@
 
     /* Minimal overlay, hidden unavailable readings, keybinds */
     body.hide-unavailable .osd-row.unavailable { display: none; }
+    .hint-tag { margin-left: 6px; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: 10px; opacity: .65; white-space: nowrap; }
     body.hide-unavailable .osd-group.no-stream { display: none; }
     .osd-group[data-group="stream"] { --group-color: #7dd3fc; }
     body.osd-minimal .osd-group-title, body.osd-minimal .osd-chart-block { display: none; }

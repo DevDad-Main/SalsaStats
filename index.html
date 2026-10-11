@@ -175,7 +175,7 @@
           </section>
           <section class="settings-group">
             <h3>GeForce NOW stream</h3>
-            <p class="setting-note">Read from the NVIDIA streamer log on the cloud PC. Round trip is the delay between the PC and your client; scores are 0-100. Only shown during a GeForce NOW session.</p>
+            <p class="setting-note">Read from the NVIDIA streamer log on the cloud PC, so these describe the session as the cloud PC sees it. NVIDIA stops writing the round trip and score lines after roughly 35 minutes, so those readings are only live early in a session and are hidden once they go stale (Round trip then shows its last known value and age for 10 minutes). Codec, resolution and client details are written once and stay. Packet and frame loss counts, Wi-Fi details and live ping are measured on your own device and cannot be read from here. Only shown during a GeForce NOW session.</p>
             <div class="settings-options">
               <label class="check-option"><input type="checkbox" data-setting="streamRtt">Round trip</label>
               <label class="check-option"><input type="checkbox" data-setting="streamQuality">Stream quality</label>

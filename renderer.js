@@ -40,7 +40,7 @@
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
         cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
         encoderLoad: false, diskRead: false, diskWrite: false,
-        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: true, streamBandwidth: true,
+        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: false, streamBandwidth: true,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -910,6 +910,88 @@
       });
     }
 
+    // Hover text for each reading. A tag marks readings that are estimates or only live early in a session.
+    const SETTING_HINTS = {
+      gpuTemp: ['GPU core temperature. Some cloud machines do not report it.'],
+      gpuUsage: ['How busy the GPU is.'],
+      gpuVram: ['Video memory in use out of the total on this machine.'],
+      gpuClock: ['Current GPU core clock speed.'],
+      cpuTemp: ['CPU temperature. Often unavailable inside cloud or virtual machines.'],
+      cpuUsage: ['How busy the CPU is across all cores.'],
+      cpuClock: ['Current CPU clock speed as the system reports it.'],
+      memoryUsage: ['System RAM in use out of the total.'],
+      fpsCurrent: ['Frames per second the game is rendering on this machine, not the stream rate you see.'],
+      fpsAverage: ['Average render FPS over the recent capture window.'],
+      fpsLow: ['The slowest 1% of frames, shown as FPS. Lower numbers mean stutter.'],
+      graphRate: ['Live graph of frame rate.'],
+      graphTime: ['Live graph of time per frame. Spikes are stutters.'],
+      cpuBusy: ['Time the CPU spends preparing each frame.', 'Needs capture'],
+      gpuBusy: ['Time the GPU spends drawing each frame.', 'Needs capture'],
+      clickToPhoton: ['Input-to-screen delay inside the game session. It does not include your network or display.', 'Session only'],
+      syncInfo: ['How frames are presented and whether V-Sync or tearing is in use.', 'Needs capture'],
+      frameType: ['Whether frames come from the game or from frame generation.', 'Needs capture'],
+      videoBusy: ['GPU video engine load measured by frame capture.', 'Needs capture'],
+      streamRtt: ['Delay between the cloud PC and your client. NVIDIA only logs it early in a session. After that it shows the last known value and its age for 10 minutes, then hides.', 'Early session'],
+      streamQuality: ['NVIDIA stream quality score out of 100. Only live while NVIDIA is still logging.', 'Early session'],
+      streamScores: ['NVIDIA bandwidth, loss and latency scores. Only live while NVIDIA is still logging.', 'Early session'],
+      streamMode: ['Resolution and frame rate of the stream, written once when it starts.'],
+      streamBitrate: ['The highest bitrate the stream may use. It is a limit, not the current bitrate.'],
+      streamHealth: ['NVIDIA overall stream score. Only live while NVIDIA is still logging.', 'Early session'],
+      streamBottleneck: ['The weakest part of the stream, shown only when it scores under 90%. Only live while NVIDIA is still logging.', 'Early session'],
+      streamClient: ['Client type and version, and whether HDR was requested. Written once at the start.'],
+      streamCodec: ['Video codec, bit depth and colour format in use. Written once at the start.'],
+      streamFeatures: ['Stream features NVIDIA enabled, such as Reflex, cloud G-Sync and L4S.'],
+      streamFps: ['Stream frame rate worked out from NVIDIA log timestamps. Only live while NVIDIA is still logging.', 'Estimate'],
+      streamLoss: ['How many log samples had a loss score under 100 this session. It is a rough hint, not a packet count.', 'Estimate'],
+      streamAge: ['How old the newest stream score is. A large number means NVIDIA has stopped logging, so the scores above are hidden.'],
+      streamBandwidth: ['Data the cloud PC is sending on the stream network adapter.'],
+      encoderLoad: ['Video encoder load. On GeForce NOW this is the stream being encoded.'],
+      diskRead: ['Disk read rate in megabytes per second.'],
+      diskWrite: ['Disk write rate in megabytes per second.'],
+    };
+    document.querySelectorAll('[data-setting], [data-minimal]').forEach(input => {
+      const hint = SETTING_HINTS[input.dataset.setting || input.dataset.minimal];
+      const label = input.closest('label');
+      if (!hint || !label) return;
+      label.title = hint[0];
+      if (hint[1]) {
+        const tag = document.createElement('span');
+        tag.className = 'hint-tag';
+        tag.textContent = hint[1];
+        label.append(tag);
+      }
+    });
+
+    const CONTROL_HINTS = {
+      'profile-select': 'Pick the default layout or a game layout to edit. Game layouts apply automatically while that game runs.',
+      'scale-setting': 'Scales all overlay text.',
+      'size-setting': 'Width of the overlay panel.',
+      'spacing-setting': 'Extra space between overlay groups.',
+      'opacity-setting': 'How solid the overlay background is.',
+      'background-setting': 'None shows text only, Soft is a light backing, Full is a solid panel.',
+      'border-setting': 'Draws a border around the overlay.',
+      'anchor-setting': 'Which screen corner the overlay sits in. Use the edit keybind to drag it anywhere.',
+      'hide-unavailable': 'Hides readings this machine cannot provide instead of showing dashes.',
+      'fps-mode': 'Raw shows the true render rate. Capped limits the displayed number to compare with your stream.',
+      'fps-cap': 'Highest FPS value SalsaStats will display. It does not limit the game.',
+      'login-enabled': 'Starts SalsaStats when you sign in to Windows. Installed app only.',
+      'start-overlay': 'Skips the dashboard and opens the overlay at launch.',
+      'auto-overlay': 'Keeps the overlay hidden until a game starts presenting frames.',
+      'overlay-above-games': 'Forces the overlay above fullscreen games. Turn it off if a game minimizes.',
+    };
+    Object.entries(CONTROL_HINTS).forEach(([id, text]) => {
+      const label = document.getElementById(id)?.closest('label');
+      if (label) label.title = text;
+    });
+    document.querySelectorAll('[data-color]').forEach(input => {
+      const label = input.closest('label');
+      if (label) label.title = 'Colour of this group in the overlay and preview.';
+    });
+    document.querySelectorAll('[data-min]').forEach(input => {
+      const label = input.closest('label');
+      if (label) label.title = 'Appearance of the minimal view only. The detailed overlay has its own settings.';
+    });
+
     const unsubscribeStats = statsApi.onStatsUpdate(stats => {
       document.getElementById('cpu-value').textContent = stats.cpu.usage;
       document.getElementById('cpu-name').textContent = stats.cpu.name;
@@ -958,7 +1040,7 @@
       const sent = stats.network?.sentMbps;
       const ageSeconds = stream && Number.isFinite(stream.ageMs) ? Math.round(stream.ageMs / 1000) : null;
       const ageText = ageSeconds === null ? null : ageSeconds < 120 ? `${ageSeconds} s` : `${Math.round(ageSeconds / 60)} min`;
-      const hasRtd = Boolean(stream && Number.isFinite(stream.rtd));
+      const hasRtd = Boolean(stream && Number.isFinite(stream.rtd) && (live || (ageSeconds !== null && ageSeconds <= 600)));
       setField('streamRtt', !hasRtd ? '--' : live || ageText === null ? `${stream.rtd} ms` : `${stream.rtd} ms \u00b7 ${ageText} ago`);
       setField('streamQuality', live ? `${stream.quality} / 100` : '--');
       setField('streamScores', live ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');
