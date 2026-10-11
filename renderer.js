@@ -40,6 +40,7 @@
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
         cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
         encoderLoad: false, diskRead: false, diskWrite: false,
+        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -939,7 +940,36 @@
       setField('diskRead', oneDecimal(io.diskReadMBps));
       setField('diskWrite', oneDecimal(io.diskWriteMBps));
       renderCoreBars(stats.cpu.perCore || []);
+      const stream = stats.stream;
+      setField('streamRtt', stream ? stream.rtd : '--');
+      setField('streamQuality', stream ? `${stream.quality} / 100` : '--');
+      setField('streamScores', stream ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');
+      setField('streamMode', stream && Number.isFinite(stream.width) ? `${stream.width}x${stream.height}@${stream.fps}` : '--');
+      setField('streamBitrate', stream && Number.isFinite(stream.maxBitrateMbps) ? `${stream.maxBitrateMbps} Mbps` : '--');
+      setField('streamHealth', stream && Number.isFinite(stream.health) ? `${stream.health}%` : '--');
+      setField('streamBottleneck', stream && Number.isFinite(stream.health) ? (stream.bottleneck || 'None') : '--');
+      setField('streamClient', stream && stream.clientType
+        ? `${stream.clientType}${stream.clientVersion ? ` v${stream.clientVersion}` : ''} \u00b7 HDR ${stream.hdr ? 'on' : 'off'}`
+        : '--');
+      document.querySelectorAll('[data-group="stream"]').forEach(group => group.classList.toggle('no-stream', !stream));
+      setField('streamCodec', stream && stream.codec
+        ? [stream.codec, stream.bitDepth && `${stream.bitDepth}-bit`, stream.chroma && `YUV ${stream.chroma}`].filter(Boolean).join(' \u00b7 ')
+        : '--');
+      const featureList = stream ? [
+        stream.reflex && 'Reflex', stream.cloudGsync && 'G-Sync', stream.l4s && 'L4S',
+      ].filter(Boolean) : [];
+      setField('streamFeatures', featureList.length ? featureList.join(' \u00b7 ') : '--');
       const unavailable = {
+        streamRtt: !stream,
+        streamQuality: !stream,
+        streamScores: !stream,
+        streamMode: !(stream && Number.isFinite(stream.width)),
+        streamBitrate: !(stream && Number.isFinite(stream.maxBitrateMbps)),
+        streamHealth: !(stream && Number.isFinite(stream.health)),
+        streamBottleneck: !(stream && Number.isFinite(stream.health)),
+        streamClient: !(stream && stream.clientType),
+        streamCodec: !(stream && stream.codec),
+        streamFeatures: !featureList.length,
         encoderLoad: !Number.isFinite(stats.gpu.encoder),
         diskRead: !Number.isFinite(io.diskReadMBps),
         diskWrite: !Number.isFinite(io.diskWriteMBps),

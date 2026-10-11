@@ -1,0 +1,167 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
+const STREAM_LOG_PATH = path.join(
+  process.env.ProgramData || 'C:\\ProgramData',
+  'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log',
+);
+const FIRST_READ_BYTES = 4 * 1024 * 1024;
+const TAIL_READ_BYTES = 128 * 1024;
+const POLL_MS = 2000;
+const CLIENT_POLL_MS = 15000;
+const SERVICE_CHUNK_BYTES = 8 * 1024 * 1024;
+// QoS lines arrive every second or two while a session is live.
+const STALE_MS = 20000;
+
+const QOS_PATTERN = /Frame Number: (\d+), Client Q-score: (\d+), RTD: (\d+) ms, BW score: (\d+), Loss score: (\d+), Latency score: (\d+), Avg Game FPS: ([\d.]+)/g;
+const MODE_PATTERN = /Streaming mode changed to (\d+)x(\d+)@(\d+)/g;
+const BITRATE_PATTERN = /Actual Bitrate: ([\d.]+)Mbps Max Bitrate: ([\d.]+)Mbps/g;
+const SA_PATTERN = /SA Scores : Overall: ([\d.]+), Gpu: ([\d.]+), Server: ([\d.]+), Visual: ([\d.]+), Decoder: ([\d.]+), DownlinkLag: ([\d.]+), DownlinkCongestion: ([\d.]+), Uplink: ([\d.]+)/g;
+const SA_LABELS = ['GPU', 'Server', 'Visual', 'Decoder', 'Downlink lag', 'Congestion', 'Uplink'];
+const SERVICE_LOG_PATH = path.join(
+  process.env.ProgramData || 'C:\\ProgramData',
+  'NVIDIA Corporation', 'nvstreamsvc', 'nvstreamsvcCurrent.log',
+);
+const CLIENT_TYPE_PATTERN = /Client type is ([\w-]+)/g;
+const CLIENT_MODE_PATTERN = /Client version \[([\d.]+)\] has requested \((\d+)x(\d+)@(\d+)Hz\) with HDR: (\w+)/g;
+const BOTTLENECK_THRESHOLD = 0.9;
+const CODEC_PATTERN = /Stream:\d+ (HEVC|H264|H\.264|AV1) video format selected/g;
+const SURFACE_PATTERN = /Capture SurfaceFormat used: (\w+)/g;
+const SURFACE_FORMATS = {
+  yuv444_10: { chroma: '4:4:4', bits: 10 },
+  yuv444: { chroma: '4:4:4', bits: 8 },
+  yuv420_10: { chroma: '4:2:0', bits: 10 },
+  p010: { chroma: '4:2:0', bits: 10 },
+  nv12: { chroma: '4:2:0', bits: 8 },
+  yuv420: { chroma: '4:2:0', bits: 8 },
+};
+const CODEC_NAMES = { HEVC: 'H.265', H264: 'H.264', 'H.264': 'H.264', AV1: 'AV1' };
+
+function featureFlag(text, name) {
+  const match = lastMatch(text, new RegExp(`\\(${name}:(True|False)\\)`, 'gi'));
+  return match ? match[1].toLowerCase() === 'true' : undefined;
+}
+
+function lastMatch(text, pattern) {
+  let found = null;
+  for (const match of text.matchAll(pattern)) found = match;
+  return found;
+}
+
+function parseServiceLog(text) {
+  const result = {};
+  const type = lastMatch(text, CLIENT_TYPE_PATTERN);
+  if (type) result.clientType = type[1];
+  const mode = lastMatch(text, CLIENT_MODE_PATTERN);
+  if (mode) Object.assign(result, { clientVersion: mode[1], hdr: mode[5].toLowerCase() === 'enabled' });
+  const codec = lastMatch(text, CODEC_PATTERN);
+  if (codec) result.codec = CODEC_NAMES[codec[1]];
+  const surface = SURFACE_FORMATS[lastMatch(text, SURFACE_PATTERN)?.[1]?.toLowerCase()];
+  if (surface) Object.assign(result, { chroma: surface.chroma, bitDepth: surface.bits });
+  for (const [key, name] of [['reflex', 'reflex'], ['cloudGsync', 'cloud gsync'], ['l4s', 'L4s enabled']]) {
+    const value = featureFlag(text, name);
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
+
+function parseStreamLog(text) {
+  const result = {};
+  const sa = lastMatch(text, SA_PATTERN);
+  if (sa) {
+    const parts = sa.slice(2, 9).map(Number);
+    result.health = Math.round(Number(sa[1]) * 100);
+    const worst = parts.reduce((low, value, index) => (value < parts[low] ? index : low), 0);
+    result.bottleneck = parts[worst] < BOTTLENECK_THRESHOLD ? SA_LABELS[worst] : null;
+  }
+  const qos = lastMatch(text, QOS_PATTERN);
+  if (qos) {
+    Object.assign(result, {
+      quality: Number(qos[2]),
+      rtd: Number(qos[3]),
+      bandwidthScore: Number(qos[4]),
+      lossScore: Number(qos[5]),
+      latencyScore: Number(qos[6]),
+      gameFps: Number(qos[7]),
+    });
+  }
+  const mode = lastMatch(text, MODE_PATTERN);
+  if (mode) Object.assign(result, { width: Number(mode[1]), height: Number(mode[2]), fps: Number(mode[3]) });
+  const bitrate = lastMatch(text, BITRATE_PATTERN);
+  if (bitrate) Object.assign(result, { startBitrateMbps: Number(bitrate[1]), maxBitrateMbps: Number(bitrate[2]) });
+  return result;
+}
+
+function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_LOG_PATH) {
+  let sticky = {};
+  let lastSize = 0;
+  let lastPoll = 0;
+  let cached = null;
+  let client = {};
+  let clientOffset = 0;
+  let lastClientPoll = 0;
+
+  // Codec and client lines are written once at session start, so scan the service log incrementally.
+  function readClient(now) {
+    if (now - lastClientPoll < CLIENT_POLL_MS) return;
+    lastClientPoll = now;
+    try {
+      const { size } = fs.statSync(servicePath);
+      if (size < clientOffset) {
+        client = {};
+        clientOffset = 0;
+      }
+      if (size === clientOffset) return;
+      const length = Math.min(size - clientOffset, SERVICE_CHUNK_BYTES);
+      const buffer = Buffer.alloc(length);
+      const fd = fs.openSync(servicePath, 'r');
+      try {
+        fs.readSync(fd, buffer, 0, length, clientOffset);
+      } finally {
+        fs.closeSync(fd);
+      }
+      clientOffset += length;
+      client = { ...client, ...parseServiceLog(buffer.toString('utf8')) };
+    } catch {
+      client = {};
+      clientOffset = 0;
+    }
+  }
+
+  function readTail(size) {
+    const length = Math.min(size, lastSize === 0 ? FIRST_READ_BYTES : TAIL_READ_BYTES);
+    const buffer = Buffer.alloc(length);
+    const fd = fs.openSync(logPath, 'r');
+    try {
+      fs.readSync(fd, buffer, 0, length, size - length);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return buffer.toString('utf8');
+  }
+
+  return function readStream(now = Date.now()) {
+    if (now - lastPoll < POLL_MS) return cached;
+    lastPoll = now;
+    try {
+      const { size, mtimeMs } = fs.statSync(logPath);
+      if (now - mtimeMs > STALE_MS || size === 0) {
+        cached = null;
+        sticky = {};
+        lastSize = 0;
+        return cached;
+      }
+      if (size < lastSize) sticky = {};
+      readClient(now);
+      const parsed = parseStreamLog(readTail(size));
+      lastSize = size;
+      sticky = { ...sticky, ...parsed };
+      cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client } : null;
+    } catch {
+      cached = null;
+    }
+    return cached;
+  };
+}
+
+module.exports = { createStreamLogReader, parseServiceLog, parseStreamLog };

@@ -14,7 +14,7 @@
     <span class="brand-edition">SYSTEM MONITOR</span>
     <span class="bar-spacer"></span>
     <button class="window-action" id="mode-toggle" type="button" title="Switch to compact view">Compact view</button>
-    <button class="window-action" id="overlay-toggle" type="button" title="Open overlay view">Overlay</button>
+    <button class="window-action" id="overlay-toggle" type="button" title="Switch the app into the in-game overlay">Show overlay</button>
     <button class="window-action" id="pin-toggle" type="button" aria-pressed="false" title="Keep this window above others">Pin</button>
     <div class="window-controls" aria-label="Window controls">
       <button class="window-control minimize" id="window-minimize" type="button" aria-label="Minimize window" title="Minimize"></button>
@@ -26,7 +26,7 @@
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" id="tab-btn-overview" role="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
     <button class="tab" id="tab-btn-games" role="tab" type="button" data-tab="games" aria-selected="false">Games</button>
-    <button class="tab" id="tab-btn-overlay" role="tab" type="button" data-tab="overlay" aria-selected="false">Overlay</button>
+    <button class="tab" id="tab-btn-overlay" role="tab" type="button" data-tab="overlay" aria-selected="false">Customize overlay</button>
     <button class="tab" id="tab-btn-settings" role="tab" type="button" data-tab="settings" aria-selected="false">Settings</button>
   </nav>
 
@@ -171,6 +171,22 @@
               <label class="check-option"><input type="checkbox" data-setting="syncInfo">Present mode / sync</label>
               <label class="check-option"><input type="checkbox" data-setting="frameType">Frame type</label>
               <label class="check-option"><input type="checkbox" data-setting="videoBusy">GPU video busy</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>GeForce NOW stream</h3>
+            <p class="setting-note">Read from the NVIDIA streamer log on the cloud PC. Round trip is the delay between the PC and your client; scores are 0-100. Only shown during a GeForce NOW session.</p>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="streamRtt">Round trip</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamQuality">Stream quality</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamScores">Network scores</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamMode">Stream resolution</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamBitrate">Bitrate limit</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamHealth">Stream health</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamBottleneck">Weakest link</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamClient">Client / HDR</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamCodec">Codec</label>
+              <label class="check-option"><input type="checkbox" data-setting="streamFeatures">Stream features</label>
             </div>
           </section>
           <section class="settings-group">
@@ -374,6 +390,19 @@
         <h2 class="osd-group-title">SYSTEM I/O</h2>
         <div class="osd-row" data-row="diskRead"><span class="osd-label">Disk Read</span><span class="osd-value"><span data-field="diskRead">--</span><span class="osd-unit">MB</span></span></div>
         <div class="osd-row" data-row="diskWrite"><span class="osd-label">Disk Write</span><span class="osd-value"><span data-field="diskWrite">--</span><span class="osd-unit">MB</span></span></div>
+      </section>
+      <section class="osd-group" data-group="stream">
+        <h2 class="osd-group-title">STREAM</h2>
+        <div class="osd-row" data-row="streamRtt"><span class="osd-label">Round Trip</span><span class="osd-value"><span data-field="streamRtt">--</span><span class="osd-unit">ms</span></span></div>
+        <div class="osd-row" data-row="streamQuality"><span class="osd-label">Quality</span><span class="osd-value" data-field="streamQuality">--</span></div>
+        <div class="osd-row" data-row="streamScores"><span class="osd-label">BW / Loss / Lat</span><span class="osd-value" data-field="streamScores">--</span></div>
+        <div class="osd-row" data-row="streamMode"><span class="osd-label">Stream</span><span class="osd-value" data-field="streamMode">--</span></div>
+        <div class="osd-row" data-row="streamBitrate"><span class="osd-label">Max Bitrate</span><span class="osd-value" data-field="streamBitrate">--</span></div>
+        <div class="osd-row" data-row="streamHealth"><span class="osd-label">Health</span><span class="osd-value" data-field="streamHealth">--</span></div>
+        <div class="osd-row" data-row="streamBottleneck"><span class="osd-label">Weakest Link</span><span class="osd-value" data-field="streamBottleneck">--</span></div>
+        <div class="osd-row" data-row="streamClient"><span class="osd-label">Client</span><span class="osd-value" data-field="streamClient">--</span></div>
+        <div class="osd-row" data-row="streamCodec"><span class="osd-label">Codec</span><span class="osd-value" data-field="streamCodec">--</span></div>
+        <div class="osd-row" data-row="streamFeatures"><span class="osd-label">Features</span><span class="osd-value" data-field="streamFeatures">--</span></div>
       </section>
       <section class="osd-group" data-group="fps">
         <h2 class="osd-group-title">FRAMERATE</h2>

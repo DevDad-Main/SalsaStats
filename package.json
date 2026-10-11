@@ -1,6 +1,6 @@
 {
   "name": "salsastats",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {
@@ -45,6 +45,10 @@
         "to": "PresentMon.exe"
       },
       {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
         "from": "vendor/nvapi",
         "to": "nvapi"
       }
@@ -60,7 +64,8 @@
       "loading.gif",
       "package.json",
       "nvidia-perf.js",
-      "presentmon.js"
+      "presentmon.js",
+      "stream-log.js"
     ],
     "win": {
       "target": [

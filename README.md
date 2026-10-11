@@ -26,6 +26,9 @@ It was built for GeForce NOW sessions, including setups made with tools like Sal
 - **Per-game layouts**: give each game its own name and overlay look, applied automatically while it runs
 - **Minimal view** with its own appearance, one keypress away
 - **Real frame rate** with average, 1% low and live graphs, raw or capped to your stream rate
+- **GeForce NOW stream readout**: round trip, stream health, weakest link, codec, resolution and more, read from the session's NVIDIA logs
+- **Rig details**: on GeForce NOW the CPU line shows the specific processor for your rig tier
+- **Lives in the tray**: closing the window hides SalsaStats instead of quitting it
 - **Everything is configurable**: readings, colours, size, spacing, border and keybinds
 - **Built-in log panel** and one-click updates
 
@@ -39,7 +42,7 @@ The installer isn't code-signed, so Windows SmartScreen may warn you. Choose **M
 
 ## Quick start
 
-Open the app and press **Overlay**. From then on you control it with the keyboard, because the overlay ignores the mouse.
+Open the app and press **Show overlay**. From then on you control it with the keyboard, because the overlay ignores the mouse.
 
 ### Keybinds
 
@@ -58,10 +61,25 @@ Every one of these can be changed in **Settings → Keybinds**. In the dashboard
 | --- | --- |
 | **Overview** | Live CPU, GPU and memory, usage history and frame rate |
 | **Games** | Your library. Add a game by its `.exe`, add a whole folder at once, or press **Add running game** |
-| **Overlay** | Choose readings, colours, size, spacing and border, and design the minimal view separately |
+| **Customize overlay** | Choose readings, colours, size, spacing and border, and design the minimal view separately |
 | **Settings** | Updates, keybinds, frame rate mode, window behaviour and the log folder |
 
-In the **Overlay** tab, the **Layout for** menu switches between the default layout and any game in your library.
+In the **Customize overlay** tab, the **Layout for** menu switches between the default layout and any game in your library.
+
+### Tray
+
+Closing the window hides SalsaStats to the system tray and keeps it running. Click the tray icon to bring it back, or right-click it for **Show**, **Hide** and **Quit**. Quit from the tray menu to exit completely.
+
+## GeForce NOW stream readout
+
+On a GeForce NOW session SalsaStats reads the NVIDIA streamer logs on the cloud PC and can show a **STREAM** group in the overlay. Turn each reading on in **Customize overlay → GeForce NOW stream**:
+
+- **Round trip**: the delay between the cloud PC and your client, in milliseconds
+- **Stream quality**, **Network scores** and **Health**: NVIDIA's own 0-100 stream scores
+- **Weakest link**: the lowest scoring part of the stream (GPU, server, visual, decoder, downlink lag, congestion or uplink), shown only when it drops below 90%
+- **Stream resolution**, **Bitrate limit**, **Codec**, **Client / HDR** and **Stream features** (Reflex, cloud G-Sync, L4S)
+
+These values describe the session as the cloud PC sees it. Raw packet and frame loss counts, Wi-Fi details and live bandwidth are measured on your own device and are not available to SalsaStats. The group is hidden outside a GeForce NOW session.
 
 ## Frame rate
 

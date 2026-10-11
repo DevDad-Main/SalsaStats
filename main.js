@@ -1,10 +1,11 @@
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, clipboard, dialog, globalShortcut, ipcMain, screen, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
 const nvidiaPerf = require('./nvidia-perf');
+const { createStreamLogReader } = require('./stream-log');
 const { createPresentMonCapture, resolvePresentMonPath } = require('./presentmon');
 
 const SAMPLE_INTERVAL_MS = 2000;
@@ -16,6 +17,7 @@ const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const readStats = createStatsReader();
+const readStream = createStreamLogReader();
 const logger = createLogger({ fallbackDirectory: path.join(process.cwd(), 'logs') });
 
 let mainWindow;
@@ -31,6 +33,8 @@ let pinned = false;
 let overlayAboveGames = false;
 let overlayAnchor = 'top-right';
 let isQuitting = false;
+let appQuitting = false;
+let tray = null;
 let isShuttingDown = false;
 let fatalDialogOpen = false;
 let appExitCode = 0;
@@ -673,7 +677,12 @@ function createWindow() {
     if (mainWindow === window && currentMode === 'overlay' && overlayAboveGames && !isQuitting) window.moveTop();
   });
   window.on('restore', keepOnScreen);
-  window.on('close', () => {
+  window.on('close', event => {
+    if (!appQuitting) {
+      event.preventDefault();
+      window.hide();
+      return;
+    }
     isWindowClosing = true;
     clearInterval(overlayZOrderTimer);
     overlayZOrderTimer = null;
@@ -815,6 +824,7 @@ async function sampleStats() {
   try {
     const stats = await readStats();
     stats.frames = frameCapture ? frameCapture.getSnapshot() : { status: 'missing', message: '', fps: null };
+    stats.stream = readStream();
     if (!initialHardwareSampleLogged) {
       logger.writeSync('info', 'Initial system telemetry sample.', {
         cpuName: stats.cpu.name,
@@ -849,7 +859,34 @@ async function sampleStats() {
   }
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (currentMode === 'overlay') {
+    mainWindow.showInactive();
+    return;
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.ico')
+    : path.join(__dirname, 'build', 'icon.ico');
+  tray = new Tray(iconPath);
+  tray.setToolTip('SalsaStats');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show SalsaStats', click: showMainWindow },
+    { label: 'Hide', click: () => mainWindow?.hide() },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ]));
+  tray.on('click', showMainWindow);
+}
+
 app.on('before-quit', () => {
+  appQuitting = true;
   stopBackgroundWork();
   if (!shutdownTimer) {
     shutdownTimer = setTimeout(() => app.exit(appExitCode), SHUTDOWN_TIMEOUT_MS);
@@ -1015,14 +1052,7 @@ const hasInstanceLock = app.requestSingleInstanceLock();
 if (!hasInstanceLock) app.quit();
 
 app.on('second-instance', () => {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  if (currentMode === 'overlay') {
-    if (!mainWindow.isVisible()) mainWindow.showInactive();
-    return;
-  }
-  mainWindow.show();
-  mainWindow.focus();
+  showMainWindow();
 });
 
 app.whenReady().then(() => {
@@ -1038,6 +1068,7 @@ app.whenReady().then(() => {
   registerUpdateHandlers();
   configureAutoUpdates();
   createWindow();
+  createTray();
   overlayCustomPosition = loadOverlayPosition();
   registerShortcuts();
   registerKeybindHandlers();

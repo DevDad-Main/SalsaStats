@@ -361,6 +361,8 @@
 
     /* Minimal overlay, hidden unavailable readings, keybinds */
     body.hide-unavailable .osd-row.unavailable { display: none; }
+    body.hide-unavailable .osd-group.no-stream { display: none; }
+    .osd-group[data-group="stream"] { --group-color: #7dd3fc; }
     body.osd-minimal .osd-group-title, body.osd-minimal .osd-chart-block { display: none; }
     body.osd-minimal .osd-shell { width: fit-content; min-width: 190px; }
     body.osd-minimal .osd-group { margin-top: 0; }
