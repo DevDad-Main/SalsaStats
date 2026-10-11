@@ -1,3 +1,7 @@
+# SalsaStats 1.0.47
+
+- Added bouncy spring animations when the overlay opens and closes. The overlay scales up with a damped bounce (like a dropped ball) on enter, and shrinks down with a quick bounce on exit. Animations use `transform`/`opacity` only for GPU-accelerated performance, respect the system "Reduce motion" accessibility setting, and can be toggled off in **Settings → Startup and overlay → Animate overlay open/close** (enabled by default).
+
 # SalsaStats 1.0.46
 
 - The SalsaNOW automatic start now has a proper safety net, so a broken build can never lock anyone out of their session. The startup block counts sessions where SalsaStats was launched but was gone again within 10 minutes, in a file that lives next to the batch file (`I:\Apps\SalsaNOW\SalsaStatsFailures.txt`, the folder that survives between sessions). After three early exits in a row it stops launching SalsaStats on its own, so the next session just opens. A session where SalsaStats stays up for 10 minutes resets the count.
