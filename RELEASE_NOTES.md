@@ -1,3 +1,9 @@
+# SalsaStats 1.0.41
+
+- Fixed the STREAM readout showing old values. NVIDIA stops writing round-trip and score lines to the streamer log part-way through a session, so those readings are now hidden once they are more than 30 seconds old, and Data age shows how old they are.
+- Added Bandwidth used, a live reading of the data the cloud PC is sending, taken from the network adapter counters.
+- Codec, resolution, client and feature details are unaffected because they are written once at the start of the session.
+
 # SalsaStats 1.0.40
 
 - Added STREAM readings worked out from the streamer log: Stream FPS (from the stream's frame counter and log timestamps), Loss dips (how many samples this session had a Loss score below 100) and Data age (how far behind the log is, so you can tell a frozen readout from a steady connection).

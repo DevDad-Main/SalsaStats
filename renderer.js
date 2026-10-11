@@ -40,7 +40,7 @@
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
         cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
         encoderLoad: false, diskRead: false, diskWrite: false,
-        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: true,
+        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: true, streamBandwidth: true,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -953,13 +953,16 @@
       setField('diskWrite', oneDecimal(io.diskWriteMBps));
       renderCoreBars(stats.cpu.perCore || []);
       const stream = heldStream(stats.stream, stats.sampledAt);
-      setField('streamRtt', stream ? stream.rtd : '--');
-      setField('streamQuality', stream ? `${stream.quality} / 100` : '--');
-      setField('streamScores', stream ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');
+      // QoS values come from log lines that NVIDIA stops writing mid-session; stale ones are not shown.
+      const live = Boolean(stream && stream.live);
+      const sent = stats.network?.sentMbps;
+      setField('streamRtt', live ? stream.rtd : '--');
+      setField('streamQuality', live ? `${stream.quality} / 100` : '--');
+      setField('streamScores', live ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');
       setField('streamMode', stream && Number.isFinite(stream.width) ? `${stream.width}x${stream.height}@${stream.fps}` : '--');
       setField('streamBitrate', stream && Number.isFinite(stream.maxBitrateMbps) ? `${stream.maxBitrateMbps} Mbps` : '--');
-      setField('streamHealth', stream && Number.isFinite(stream.health) ? `${stream.health}%` : '--');
-      setField('streamBottleneck', stream && Number.isFinite(stream.health) ? (stream.bottleneck || 'None') : '--');
+      setField('streamHealth', live && Number.isFinite(stream.health) ? `${stream.health}%` : '--');
+      setField('streamBottleneck', live && Number.isFinite(stream.health) ? (stream.bottleneck || 'None') : '--');
       setField('streamClient', stream && stream.clientType
         ? `${stream.clientType}${stream.clientVersion ? ` v${stream.clientVersion}` : ''} \u00b7 HDR ${stream.hdr ? 'on' : 'off'}`
         : '--');
@@ -971,23 +974,27 @@
         stream.reflex && 'Reflex', stream.cloudGsync && 'G-Sync', stream.l4s && 'L4S',
       ].filter(Boolean) : [];
       setField('streamFeatures', featureList.length ? featureList.join(' \u00b7 ') : '--');
-      setField('streamFps', stream && Number.isFinite(stream.streamFps) ? String(stream.streamFps) : '--');
-      setField('streamLoss', stream && Number.isFinite(stream.lossDips) ? `${stream.lossDips} / ${stream.samples}` : '--');
-      setField('streamAge', stream && Number.isFinite(stream.ageMs) ? `${Math.round(stream.ageMs / 1000)} s` : '--');
+      setField('streamFps', live && Number.isFinite(stream.streamFps) ? String(stream.streamFps) : '--');
+      setField('streamLoss', live && Number.isFinite(stream.lossDips) ? `${stream.lossDips} / ${stream.samples}` : '--');
+      const ageSeconds = stream && Number.isFinite(stream.ageMs) ? Math.round(stream.ageMs / 1000) : null;
+      setField('streamAge', ageSeconds === null ? '--'
+        : `${ageSeconds < 120 ? `${ageSeconds} s` : `${Math.round(ageSeconds / 60)} min`}${live ? '' : ' (stale)'}`);
+      setField('streamBandwidth', stream && Number.isFinite(sent) ? `${sent.toFixed(sent < 10 ? 1 : 0)} Mbps` : '--');
       const unavailable = {
-        streamRtt: !stream,
-        streamQuality: !stream,
-        streamScores: !stream,
+        streamRtt: !live,
+        streamQuality: !live,
+        streamScores: !live,
         streamMode: !(stream && Number.isFinite(stream.width)),
         streamBitrate: !(stream && Number.isFinite(stream.maxBitrateMbps)),
-        streamHealth: !(stream && Number.isFinite(stream.health)),
-        streamBottleneck: !(stream && Number.isFinite(stream.health)),
+        streamHealth: !(live && Number.isFinite(stream.health)),
+        streamBottleneck: !(live && Number.isFinite(stream.health)),
         streamClient: !(stream && stream.clientType),
         streamCodec: !(stream && stream.codec),
         streamFeatures: !featureList.length,
-        streamFps: !(stream && Number.isFinite(stream.streamFps)),
-        streamLoss: !(stream && Number.isFinite(stream.lossDips)),
-        streamAge: !(stream && Number.isFinite(stream.ageMs)),
+        streamFps: !(live && Number.isFinite(stream.streamFps)),
+        streamLoss: !(live && Number.isFinite(stream.lossDips)),
+        streamAge: ageSeconds === null,
+        streamBandwidth: !(stream && Number.isFinite(sent)),
         encoderLoad: !Number.isFinite(stats.gpu.encoder),
         diskRead: !Number.isFinite(io.diskReadMBps),
         diskWrite: !Number.isFinite(io.diskWriteMBps),

@@ -12,6 +12,7 @@ const CLIENT_POLL_MS = 15000;
 const SERVICE_CHUNK_BYTES = 8 * 1024 * 1024;
 // The streamer log is flushed in bursts, so ride out quiet gaps before calling the session over.
 const STALE_MS = 90000;
+const LIVE_MS = 30000;
 
 const QOS_PATTERN = /(?:\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d),(\d{3})\][^\n]*?)?Frame Number: (\d+), Client Q-score: (\d+), RTD: (\d+) ms, BW score: (\d+), Loss score: (\d+), Latency score: (\d+), Avg Game FPS: ([\d.]+)/g;
 const MODE_PATTERN = /Streaming mode changed to (\d+)x(\d+)@(\d+)/g;
@@ -199,8 +200,11 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
       delete parsed.chunkSamples;
       delete parsed.chunkLossDips;
       sticky = { ...sticky, ...parsed, lossDips: session.lossDips, samples: session.samples };
-      cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client, ageMs: Number.isFinite(sticky.qosAt) ? Math.max(0, now - sticky.qosAt) : null } : null;
-      setStatus(cached ? 'ok' : 'no-qos-data');
+      const ageMs = Number.isFinite(sticky.qosAt) ? Math.max(0, now - sticky.qosAt) : null;
+      // NVIDIA stops writing QoS lines part-way through a session, so old samples must not look live.
+      const live = Number.isFinite(sticky.rtd) && (ageMs === null || ageMs <= LIVE_MS);
+      cached = Number.isFinite(sticky.rtd) || client.clientType ? { ...sticky, ...client, ageMs, live } : null;
+      setStatus(live ? 'ok' : cached ? 'qos-stale' : 'no-qos-data');
     } catch (error) {
       setStatus(`error:${error.code || error.message}`);
     } finally {

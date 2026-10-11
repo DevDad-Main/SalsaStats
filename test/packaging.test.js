@@ -8,7 +8,7 @@ const packaged = new Set(require('../package.json').build.files);
 
 // A module missing from build.files makes the installed app fail on launch.
 test('every local module required at startup is packaged', () => {
-  const sources = ['main.js', 'stats.js', 'preload.js', 'logger.js', 'presentmon.js', 'nvidia-perf.js', 'stream-log.js'];
+  const sources = ['main.js', 'stats.js', 'preload.js', 'logger.js', 'presentmon.js', 'nvidia-perf.js', 'stream-log.js', 'net-usage.js'];
   const missing = new Set();
   for (const file of sources) {
     const text = fs.readFileSync(path.join(root, file), 'utf8');

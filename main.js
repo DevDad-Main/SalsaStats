@@ -6,6 +6,7 @@ const { createLogger } = require('./logger');
 const { createStatsReader } = require('./stats');
 const nvidiaPerf = require('./nvidia-perf');
 const { createStreamLogReader } = require('./stream-log');
+const { createNetUsageReader } = require('./net-usage');
 const { createPresentMonCapture, resolvePresentMonPath } = require('./presentmon');
 
 const SAMPLE_INTERVAL_MS = 2000;
@@ -17,6 +18,7 @@ const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const readStats = createStatsReader();
+const readNetUsage = createNetUsageReader();
 const readStream = createStreamLogReader(undefined, undefined, status => {
   logger.writeSync('info', 'GeForce NOW stream log status changed.', { status });
 });
@@ -827,6 +829,7 @@ async function sampleStats() {
     const stats = await readStats();
     stats.frames = frameCapture ? frameCapture.getSnapshot() : { status: 'missing', message: '', fps: null };
     stats.stream = readStream();
+    stats.network = readNetUsage();
     if (!initialHardwareSampleLogged) {
       logger.writeSync('info', 'Initial system telemetry sample.', {
         cpuName: stats.cpu.name,

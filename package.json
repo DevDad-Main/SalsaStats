@@ -1,6 +1,6 @@
 {
   "name": "salsastats",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "description": "SalsaStats desktop PC monitor",
   "main": "main.js",
   "scripts": {
@@ -65,7 +65,8 @@
       "package.json",
       "nvidia-perf.js",
       "presentmon.js",
-      "stream-log.js"
+      "stream-log.js",
+      "net-usage.js"
     ],
     "win": {
       "target": [

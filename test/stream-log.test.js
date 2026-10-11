@@ -75,6 +75,8 @@ test('reader follows new log lines, derives stream FPS and counts loss dips', ()
     assert.equal(next.lossDips, 1);
     assert.equal(next.samples, 2);
     assert.equal(next.ageMs, 0);
+    assert.equal(next.live, true);
+    assert.equal(read(base + 2000 + 60000).live, false);
   } finally {
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
   }
