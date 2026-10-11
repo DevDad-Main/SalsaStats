@@ -468,6 +468,18 @@ function registerLogHandlers() {
     }
   });
 
+  ipcMain.handle('shell:open-external', async (event, url) => {
+    if (!isTrustedRenderer(event)) return { ok: false, error: 'Request not allowed.' };
+    if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return { ok: false, error: 'Invalid URL.' };
+    try {
+      await shell.openExternal(url);
+      return { ok: true };
+    } catch (error) {
+      logger.writeSync('error', 'Unable to open external URL.', error);
+      return { ok: false, error: error.message };
+    }
+  });
+
   ipcMain.on('renderer:error', (event, payload) => {
     if (!isTrustedRenderer(event) || !payload || typeof payload !== 'object') return;
     const message = String(payload.message || 'Renderer error');

@@ -1421,6 +1421,9 @@
         button.textContent = 'Check for updates';
       }
     });
+    document.getElementById('view-releases').addEventListener('click', async () => {
+      await statsApi.openExternal?.('https://github.com/DevDad-Main/SalsaStats/releases');
+    });
     document.getElementById('update-later').addEventListener('click', () => { updateBanner.hidden = true; });
 
     async function refreshLogDirectory() {

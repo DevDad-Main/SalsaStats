@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('salsaStats', {
   getSalsaStartup: () => ipcRenderer.invoke('startup:get'),
   setSalsaStartup: enabled => ipcRenderer.invoke('startup:set', enabled),
   copyImage: rect => ipcRenderer.invoke('clipboard:image', rect),
+  openExternal: url => ipcRenderer.invoke('shell:open-external', url),
   onShortcut: callback => {
     const listener = (_event, action) => callback(action);
     ipcRenderer.on('shortcut', listener);
