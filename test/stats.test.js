@@ -1,7 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
-  parseCimDiskCounters,
   parseCimGpuEngineOutput,
   parseCimGpuMemoryRows,
   parseCimGpuNames,
@@ -20,9 +19,8 @@ test('maps auto-detected RTX names to GeForce NOW rigs', () => {
   assert.equal(resolveGfnRig('NVIDIA GeForce GTX 1060'), null);
 });
 
-test('parses wmic csv output into rows and feeds the disk and encoder parsers', () => {
-  const disk = parseWmicCsv('\r\r\nNode,DiskReadBytesPersec,DiskWriteBytesPersec,Name\r\r\nGFN,2097152,1048576,_Total\r\r\n');
-  assert.deepEqual(parseCimDiskCounters(disk), { diskReadMBps: 2, diskWriteMBps: 1 });
+test('parses wmic csv output into rows and feeds the encoder parser', () => {
+  assert.deepEqual(parseWmicCsv('\r\r\nNode,Name,Value\r\r\nGFN,_Total,5\r\r\n'), [{ Node: 'GFN', Name: '_Total', Value: '5' }]);
   const engines = parseWmicCsv([
     'Node,Name,UtilizationPercentage',
     'GFN,pid_1_luid_0x0_0x1_phys_0_eng_3_engtype_VideoEncode,12',
@@ -129,16 +127,3 @@ test('selects CIM dedicated GPU memory usage and converts bytes to MiB', () => {
   });
 });
 
-test('reads aggregate disk counters from CIM rows', () => {
-  assert.deepEqual(parseCimDiskCounters([
-    { Name: '0 C:', DiskReadBytesPersec: 100, DiskWriteBytesPersec: 200 },
-    { Name: '_Total', DiskReadBytesPersec: 1048576, DiskWriteBytesPersec: 2097152 },
-  ]), {
-    diskReadMBps: 1,
-    diskWriteMBps: 2,
-  });
-  assert.deepEqual(parseCimDiskCounters([]), {
-    diskReadMBps: null,
-    diskWriteMBps: null,
-  });
-});

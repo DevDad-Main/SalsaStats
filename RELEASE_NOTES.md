@@ -1,3 +1,9 @@
+# SalsaStats 1.0.45
+
+- Added Settings > Start SalsaStats when SalsaNOW starts. It adds one marked line to SalsaNOW's own startup batch file (I:\Apps\SalsaNOW\StartupBatch.bat), keeps everything else in that file, and saves a one-time backup of the original.
+- Encoder load now sits with the GPU options in Customize overlay.
+- Removed the System I/O group and the disk read and write readings, which were not available on cloud PCs.
+
 # SalsaStats 1.0.44
 
 - Disk read, disk write and encoder load now fall back to wmic when PowerShell is blocked, so System I/O can show data on locked-down cloud PCs.

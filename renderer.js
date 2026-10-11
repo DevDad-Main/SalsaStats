@@ -39,7 +39,7 @@
         cpuTemp: true, cpuUsage: true, cpuClock: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
         cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
-        encoderLoad: false, diskRead: false, diskWrite: false,
+        encoderLoad: false,
         streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: false, streamBandwidth: true,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
@@ -946,8 +946,6 @@
       streamAge: ['How old the newest stream score is. A large number means NVIDIA has stopped logging, so the scores above are hidden.'],
       streamBandwidth: ['Data the cloud PC is sending on the stream network adapter.'],
       encoderLoad: ['Video encoder load. On GeForce NOW this is the stream being encoded.'],
-      diskRead: ['Disk read rate in megabytes per second.'],
-      diskWrite: ['Disk write rate in megabytes per second.'],
     };
     document.querySelectorAll('[data-setting], [data-minimal]').forEach(input => {
       const hint = SETTING_HINTS[input.dataset.setting || input.dataset.minimal];
@@ -974,7 +972,8 @@
       'hide-unavailable': 'Hides readings this machine cannot provide instead of showing dashes.',
       'fps-mode': 'Raw shows the true render rate. Capped limits the displayed number to compare with your stream.',
       'fps-cap': 'Highest FPS value SalsaStats will display. It does not limit the game.',
-      'login-enabled': 'Starts SalsaStats when you sign in to Windows. Installed app only.',
+      'login-enabled': 'Starts SalsaStats when you sign in to Windows. Installed app only. Does not carry over between SalsaNOW sessions.',
+      'salsanow-startup': 'Adds SalsaStats to the SalsaNOW startup batch file (I:\\Apps\\SalsaNOW\\StartupBatch.bat) so it starts with every session. Your other commands in that file are kept.',
       'start-overlay': 'Skips the dashboard and opens the overlay at launch.',
       'auto-overlay': 'Keeps the overlay hidden until a game starts presenting frames.',
       'overlay-above-games': 'Forces the overlay above fullscreen games. Turn it off if a game minimizes.',
@@ -1028,11 +1027,7 @@
       setField('memoryUsage', `${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)} (${stats.memory.usage}%)`);
       renderFrames(stats.frames);
       lastStats = stats;
-      const io = stats.io || {};
-      const oneDecimal = value => (Number.isFinite(value) ? value.toFixed(1) : '--');
       setField('encoderLoad', Number.isFinite(stats.gpu.encoder) ? String(stats.gpu.encoder) : '--');
-      setField('diskRead', oneDecimal(io.diskReadMBps));
-      setField('diskWrite', oneDecimal(io.diskWriteMBps));
       renderCoreBars(stats.cpu.perCore || []);
       const stream = heldStream(stats.stream, stats.sampledAt);
       // QoS values come from log lines that NVIDIA stops writing mid-session; stale ones are not shown.
@@ -1079,8 +1074,6 @@
         streamAge: ageSeconds === null,
         streamBandwidth: !(stream && Number.isFinite(sent)),
         encoderLoad: !Number.isFinite(stats.gpu.encoder),
-        diskRead: !Number.isFinite(io.diskReadMBps),
-        diskWrite: !Number.isFinite(io.diskWriteMBps),
         gpuTemp: stats.gpu.temperature === null,
         gpuClock: stats.gpu.clock === null,
         gpuVram: !Number.isFinite(stats.gpu.memoryUsed),
@@ -1661,6 +1654,30 @@
     loginBox.addEventListener('change', async () => {
       const ok = await statsApi.setLogin(loginBox.checked).catch(() => false);
       if (!ok) loginBox.checked = !loginBox.checked;
+    });
+    const salsaBox = document.getElementById('salsanow-startup');
+    const salsaStatus = document.getElementById('salsanow-status');
+    const salsaNote = salsaStatus.textContent;
+    statsApi.getSalsaStartup?.().then(status => {
+      salsaBox.checked = status?.enabled === true;
+      if (!status?.available) {
+        salsaBox.disabled = true;
+        salsaStatus.textContent = 'The SalsaNOW folder (I:\\Apps\\SalsaNOW) was not found. This option only works inside a SalsaNOW session.';
+      } else if (!status.packaged) {
+        salsaBox.disabled = true;
+        salsaStatus.textContent = 'This option only works in the installed app.';
+      }
+    }).catch(() => { salsaBox.disabled = true; });
+    salsaBox.addEventListener('change', async () => {
+      const result = await statsApi.setSalsaStartup(salsaBox.checked).catch(() => ({ ok: false, error: 'Unable to update the startup batch file.' }));
+      if (!result?.ok) {
+        salsaBox.checked = !salsaBox.checked;
+        salsaStatus.textContent = result?.error || 'Unable to update the startup batch file.';
+        return;
+      }
+      salsaStatus.textContent = result.enabled
+        ? 'Added. SalsaStats will start the next time a SalsaNOW session begins. Your other startup commands were left as they were.'
+        : `Removed. ${salsaNote}`;
     });
     setTimeout(() => {
       syncAutoOverlay();

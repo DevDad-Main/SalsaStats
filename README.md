@@ -118,12 +118,27 @@ Turn the **STREAM** group on in **Customize overlay → GeForce NOW stream**. It
 > [!NOTE]
 > Raw packet and frame loss counts, Wi-Fi details and live ping are measured on your own device and are not available to SalsaStats. NVIDIA's own overlay (the one that shows ping and packet loss) is the place to read those.
 
-### System I/O and encoder
+### Encoder load
 
-**Encoder load** is the video engine load, which on GeForce NOW is the stream being encoded. **Disk read** and **Disk write** are per-second rates in megabytes. They come from Windows performance counters, which SalsaStats reads through PowerShell and falls back to `wmic` on machines where PowerShell is locked down.
+**Encoder load** is an optional row in the GPU group. It shows the video engine load, which on GeForce NOW is the stream being encoded. It comes from the NVIDIA sensor helper, with a Windows performance counter (read through PowerShell, or `wmic` where PowerShell is locked down) as a fallback.
 
 > [!TIP]
-> If these rows are blank on your machine, the counters aren't available there. Turn on **Hide readings that are unavailable** and they disappear instead of showing dashes.
+> If the row is blank on your machine, the counter isn't available there. Turn on **Hide readings that are unavailable** and it disappears instead of showing dashes.
+
+### Start with SalsaNOW
+
+A SalsaNOW session starts from a clean Windows each time, so the normal **Start SalsaStats with Windows** option doesn't carry over. SalsaNOW instead runs a batch file at the start of every session, `I:\Apps\SalsaNOW\StartupBatch.bat`, if one exists ([SalsaNOW documentation](https://documentation.salsanowfiles.work/Features/StartupBatchScript/)).
+
+Turn on **Settings → Start SalsaStats when SalsaNOW starts** and SalsaStats adds a single marked line to that file:
+
+```bat
+REM >>> SalsaStats (managed by SalsaStats, remove with the setting)
+start "" "C:\Users\kiosk\AppData\Local\Programs\salsastats\SalsaStats.exe"
+REM <<< SalsaStats
+```
+
+> [!NOTE]
+> Anything else already in `StartupBatch.bat` is left exactly as it was, and a copy of the original is saved once as `StartupBatch.bat.salsastats-backup` before the first change. Turning the option off removes only the SalsaStats lines. The option only works in the installed app, inside a SalsaNOW session.
 
 ## Frame rate
 
@@ -151,6 +166,7 @@ The optional **Frame analysis** readings (CPU and GPU busy time, click-to-photon
 - **The STREAM group isn't showing.** It only appears on a GeForce NOW session. Untick **Hide readings that are unavailable** to see every row, and check the log panel for the line "GeForce NOW stream log status changed".
 - **Round trip and scores vanished.** See the warning in [Stream readout](#stream-readout). NVIDIA stops logging them after about 35 minutes.
 - **Closing the window didn't quit.** That's the tray behaviour. Use **Quit** from the tray icon's menu.
+- **SalsaStats doesn't open with SalsaNOW.** Turn on **Start SalsaStats when SalsaNOW starts** in Settings, then start a new session. The option is greyed out if `I:\Apps\SalsaNOW` isn't found or you're running from source.
 
 The log panel has filter, copy, pause and clear buttons, which makes it easy to paste into a bug report. Logs live in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
 

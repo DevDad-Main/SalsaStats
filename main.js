@@ -7,6 +7,7 @@ const { createStatsReader } = require('./stats');
 const nvidiaPerf = require('./nvidia-perf');
 const { createStreamLogReader } = require('./stream-log');
 const { createNetUsageReader } = require('./net-usage');
+const startupBatch = require('./startup-batch');
 const { createPresentMonCapture, resolvePresentMonPath } = require('./presentmon');
 
 const SAMPLE_INTERVAL_MS = 2000;
@@ -338,6 +339,19 @@ function registerLogHandlers() {
     if (!isTrustedRenderer(event) || !app.isPackaged) return false;
     app.setLoginItemSettings({ openAtLogin: enabled === true });
     return true;
+  });
+
+  ipcMain.handle('startup:get', event => {
+    if (!isTrustedRenderer(event)) return { available: false, enabled: false };
+    return { ...startupBatch.getStartupStatus(), packaged: app.isPackaged };
+  });
+
+  ipcMain.handle('startup:set', (event, enabled) => {
+    if (!isTrustedRenderer(event)) return { ok: false, error: 'Request not allowed.' };
+    if (!app.isPackaged) return { ok: false, error: 'This only works in the installed app.' };
+    const result = startupBatch.setStartupEnabled(enabled === true, process.execPath);
+    if (!result.ok) logger.writeSync('warn', 'Unable to update the SalsaNOW startup batch.', { error: result.error });
+    return result;
   });
 
   ipcMain.handle('clipboard:image', async (event, rect) => {

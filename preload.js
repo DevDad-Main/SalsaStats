@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('salsaStats', {
   setAutoOverlay: (enabled, running) => ipcRenderer.invoke('overlay:auto', enabled, running),
   getLogin: () => ipcRenderer.invoke('app:get-login'),
   setLogin: enabled => ipcRenderer.invoke('app:set-login', enabled),
+  getSalsaStartup: () => ipcRenderer.invoke('startup:get'),
+  setSalsaStartup: enabled => ipcRenderer.invoke('startup:set', enabled),
   copyImage: rect => ipcRenderer.invoke('clipboard:image', rect),
   onShortcut: callback => {
     const listener = (_event, action) => callback(action);

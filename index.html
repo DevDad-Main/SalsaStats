@@ -140,6 +140,7 @@
               <label class="check-option"><input type="checkbox" data-setting="gpuUsage">Usage</label>
               <label class="check-option"><input type="checkbox" data-setting="gpuVram">VRAM</label>
               <label class="check-option"><input type="checkbox" data-setting="gpuClock">Core clock</label>
+              <label class="check-option"><input type="checkbox" data-setting="encoderLoad">Encoder load</label>
             </div>
           </section>
           <section class="settings-group">
@@ -191,15 +192,6 @@
               <label class="check-option"><input type="checkbox" data-setting="streamLoss">Loss dips</label>
               <label class="check-option"><input type="checkbox" data-setting="streamAge">Data age</label>
               <label class="check-option"><input type="checkbox" data-setting="streamBandwidth">Bandwidth used</label>
-            </div>
-          </section>
-          <section class="settings-group">
-            <h3>System I/O and encoder</h3>
-            <p class="setting-note">Encoder is the video engine load, which on GeForce NOW is the stream being encoded. Disk readings are per-second rates in megabytes.</p>
-            <div class="settings-options">
-              <label class="check-option"><input type="checkbox" data-setting="encoderLoad">Encoder load</label>
-              <label class="check-option"><input type="checkbox" data-setting="diskRead">Disk Read</label>
-              <label class="check-option"><input type="checkbox" data-setting="diskWrite">Disk Write</label>
             </div>
           </section>
           <section class="settings-group">
@@ -287,6 +279,8 @@
         <section class="settings-group">
           <h3>Startup and overlay</h3>
           <label class="check-option"><input id="login-enabled" type="checkbox">Start SalsaStats with Windows</label>
+          <label class="check-option extra"><input id="salsanow-startup" type="checkbox">Start SalsaStats when SalsaNOW starts</label>
+          <p class="setting-note" id="salsanow-status" role="status" aria-live="polite">SalsaNOW sessions start from a clean Windows each time, so "Start with Windows" does not carry over. This option adds SalsaStats to SalsaNOW's own startup batch file instead, without touching anything else in it.</p>
           <label class="check-option extra"><input id="start-overlay" type="checkbox">Open straight into the overlay</label>
           <label class="check-option extra"><input id="auto-overlay" type="checkbox">Show the overlay only while a game is running</label>
           <p class="setting-note">With the last option the overlay stays hidden until a game starts presenting frames, and hides again about 20 seconds after it stops. Ctrl+Alt+H still hides or shows it by hand. Start with Windows only works in the installed app.</p>
@@ -389,11 +383,6 @@
       <section class="osd-group" data-group="memory">
         <h2 class="osd-group-title">MEMORY</h2>
         <div class="osd-row" data-row="memoryUsage"><span class="osd-label">RAM Usage</span><span class="osd-value" data-field="memoryUsage">--</span></div>
-      </section>
-      <section class="osd-group" data-group="io">
-        <h2 class="osd-group-title">SYSTEM I/O</h2>
-        <div class="osd-row" data-row="diskRead"><span class="osd-label">Disk Read</span><span class="osd-value"><span data-field="diskRead">--</span><span class="osd-unit">MB</span></span></div>
-        <div class="osd-row" data-row="diskWrite"><span class="osd-label">Disk Write</span><span class="osd-value"><span data-field="diskWrite">--</span><span class="osd-unit">MB</span></span></div>
       </section>
       <section class="osd-group" data-group="stream">
         <h2 class="osd-group-title">STREAM</h2>

@@ -505,7 +505,6 @@
 
 
     /* Per-core CPU bars, I/O group colour, share row */
-    .osd-group[data-group="io"] { --group-color: #fda4af; }
     .core-bars { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: 12px; }
     .core-bar { position: relative; flex: 1; height: 100%; min-width: 3px; overflow: hidden; border-radius: 2px; background: var(--surface-soft); }
     .core-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 2px; background: var(--lime); transition: height .4s ease; }

@@ -125,16 +125,6 @@ function parseCimGpuMemoryRows(rows) {
   })));
 }
 
-function parseCimDiskCounters(rows) {
-  const total = normalizeRows(rows).find(row => row.Name === '_Total');
-  const readBytesPerSecond = parseOptionalNumber(total?.DiskReadBytesPersec);
-  const writeBytesPerSecond = parseOptionalNumber(total?.DiskWriteBytesPersec);
-  return {
-    diskReadMBps: readBytesPerSecond === null ? null : readBytesPerSecond / 1048576,
-    diskWriteMBps: writeBytesPerSecond === null ? null : writeBytesPerSecond / 1048576,
-  };
-}
-
 async function readGpuAdapterMemory() {
   return parseCimGpuMemoryRows(await readCimRows(
     'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
@@ -263,14 +253,6 @@ function selectGpuController(controllers) {
     .sort((left, right) => right.score - left.score || left.index - right.index)[0].controller;
 }
 
-// Disk throughput from Windows performance counters via CIM.
-async function readIoCounters() {
-  return parseCimDiskCounters(await readPerfRows(
-    'Win32_PerfFormattedData_PerfDisk_PhysicalDisk',
-    ['Name', 'DiskReadBytesPersec', 'DiskWriteBytesPersec'],
-  ));
-}
-
 function createStatsReader() {
   let cpuInfo;
   let cpuSensors = { temperature: null, clock: null };
@@ -284,10 +266,8 @@ function createStatsReader() {
   let hasPrimaryGpuTelemetry = false;
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
-  let lastIoRefresh = 0;
   let lastEncoderRefresh = 0;
   let encoderCounter = null;
-  let ioCache = { diskReadMBps: null, diskWriteMBps: null };
 
   return async function readStats() {
     const [load, memory] = await Promise.all([
@@ -414,15 +394,6 @@ function createStatsReader() {
       if (!hasPrimaryGpuTelemetry) gpuTelemetrySource = 'nvapi';
     }
 
-    if (now - lastIoRefresh >= 3000) {
-      lastIoRefresh = now;
-      try {
-        ioCache = await readIoCounters();
-      } catch {
-        // Counters are optional.
-      }
-    }
-
     if (!Number.isFinite(nvapiGpu?.videoEngine) && now - lastEncoderRefresh >= 5000) {
       lastEncoderRefresh = now;
       try {
@@ -464,7 +435,6 @@ function createStatsReader() {
         telemetrySource: gpuTelemetrySource,
         detectedAdapters,
       },
-      io: ioCache,
       sampledAt: now,
     };
   };
@@ -473,7 +443,6 @@ function createStatsReader() {
 module.exports = {
   createStatsReader,
   parseNvidiaSmiOutput,
-  parseCimDiskCounters,
   parseVideoEncoderLoad,
   parseWmicCsv,
   parseCimGpuEngineOutput,
