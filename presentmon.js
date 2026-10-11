@@ -12,6 +12,24 @@ const IGNORED_APPS = new Set([
   'startmenuexperiencehost.exe', 'shellexperiencehost.exe', 'textinputhost.exe', 'presentmon.exe',
 ]);
 
+function parseOptionalNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function averageField(frames, key) {
+  const values = frames.map(frame => frame[key]).filter(Number.isFinite);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function latestField(frames, key) {
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    if (frames[index][key] !== null && frames[index][key] !== undefined) return frames[index][key];
+  }
+  return null;
+}
+
 function splitCsvLine(line) {
   const fields = [];
   let current = '';
@@ -42,19 +60,48 @@ function createFrameTracker() {
       const processId = names.indexOf('processid');
       let frame = names.indexOf('msbetweenpresents');
       if (frame < 0) frame = names.indexOf('frametime');
-      if (application >= 0 && processId >= 0 && frame >= 0) columns = { application, processId, frame };
+      if (application >= 0 && processId >= 0 && frame >= 0) {
+        const column = name => names.indexOf(name.toLowerCase());
+        columns = {
+          application,
+          processId,
+          frame,
+          cpuBusy: column('MsCPUBusy'),
+          gpuBusy: column('MsGPUBusy'),
+          clickToPhoton: column('MsClickToPhotonLatency'),
+          syncInterval: column('SyncInterval'),
+          allowsTearing: column('AllowsTearing'),
+          presentMode: column('PresentMode'),
+          frameType: column('FrameType'),
+          videoBusy: column('VideoBusy'),
+        };
+      }
       return;
     }
 
-    const ms = Number.parseFloat(fields[columns.frame]);
-    if (!Number.isFinite(ms) || ms <= 0) return;
+    const ms = parseOptionalNumber(fields[columns.frame]);
+    if (ms === null || ms <= 0) return;
+    const readNumber = index => (index < 0 ? null : parseOptionalNumber(fields[index]));
+    const readText = index => (index < 0 || !fields[index]?.trim() ? null : fields[index].trim());
+    const tearingText = readText(columns.allowsTearing);
     const pid = fields[columns.processId];
     let entry = processes.get(pid);
     if (!entry) {
       entry = { pid, application: fields[columns.application], frames: [], lookedUp: false };
       processes.set(pid, entry);
     }
-    entry.frames.push({ time: now, ms });
+    entry.frames.push({
+      time: now,
+      ms,
+      cpuBusy: readNumber(columns.cpuBusy),
+      gpuBusy: readNumber(columns.gpuBusy),
+      clickToPhoton: readNumber(columns.clickToPhoton),
+      syncInterval: readNumber(columns.syncInterval),
+      allowsTearing: tearingText === null ? null : /^(true|1|yes)$/i.test(tearingText),
+      presentMode: readText(columns.presentMode),
+      frameType: readText(columns.frameType),
+      videoBusy: readNumber(columns.videoBusy),
+    });
     const cutoff = now - WINDOW_MS;
     while (entry.frames.length && entry.frames[0].time < cutoff) entry.frames.shift();
   }
@@ -87,6 +134,7 @@ function createFrameTracker() {
     const sorted = [...times].sort((a, b) => a - b);
     const slowest = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))];
     const recentMean = best.recent.reduce((sum, frame) => sum + frame.ms, 0) / best.recent.length;
+    const recentFrames = best.entry.frames.slice(-HISTORY_FRAMES);
     return {
       application: best.entry.application,
       displayName: best.entry.displayName || best.entry.application,
@@ -94,6 +142,14 @@ function createFrameTracker() {
       average: Math.round(1000 / mean),
       low: Math.round(1000 / slowest),
       frametimes: times.slice(-HISTORY_FRAMES),
+      cpuBusy: averageField(recentFrames, 'cpuBusy'),
+      gpuBusy: averageField(recentFrames, 'gpuBusy'),
+      clickToPhotonLatency: averageField(recentFrames, 'clickToPhoton'),
+      syncInterval: latestField(recentFrames, 'syncInterval'),
+      allowsTearing: latestField(recentFrames, 'allowsTearing'),
+      presentMode: latestField(recentFrames, 'presentMode'),
+      frameType: latestField(recentFrames, 'frameType'),
+      videoBusy: averageField(recentFrames, 'videoBusy'),
     };
   }
 
@@ -174,6 +230,7 @@ function createPresentMonCapture({ exePath, logger } = {}) {
     try {
       child = spawn(exePath, [
         '--output_stdout', '--no_console_stats', '--stop_existing_session', '--session_name', 'SalsaStats',
+        '--track_gpu_video', '--track_frame_type',
       ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
       status = 'error';

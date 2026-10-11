@@ -30,6 +30,7 @@
     const logsStatus = document.getElementById('logs-status');
     const previewStage = document.getElementById('preview-stage');
     const osdPanel = document.getElementById('osd-panel');
+    const quickMenu = osdPanel.querySelector('.osd-quick-menu');
     const maxSamples = 48;
     const PREVIEW_BASE_WIDTH = 340;
     const defaultSettings = {
@@ -37,6 +38,7 @@
         gpuTemp: true, gpuUsage: true, gpuVram: true, gpuClock: true,
         cpuTemp: true, cpuUsage: true, cpuClock: true, memoryUsage: true,
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
+        cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
         encoderLoad: false, diskRead: false, diskWrite: false,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
@@ -204,6 +206,9 @@
       document.querySelectorAll('[data-setting]').forEach(input => {
         input.checked = E.visible[input.dataset.setting] !== false;
       });
+      osdPanel.querySelectorAll('[data-menu-setting]').forEach(input => {
+        input.checked = P.visible[input.dataset.menuSetting] !== false;
+      });
       document.querySelectorAll('[data-color]').forEach(input => {
         input.value = E.colors[input.dataset.color];
       });
@@ -243,6 +248,15 @@
         applySettings();
       });
     });
+    osdPanel.querySelectorAll('[data-menu-setting]').forEach(input => {
+      input.addEventListener('change', () => {
+        appliedProfile().visible[input.dataset.menuSetting] = input.checked;
+        saveSettings();
+        applySettings();
+      });
+    });
+    quickMenu.querySelector('.osd-menu-close').addEventListener('click', () => statsApi.setOverlayMenu(false));
+    quickMenu.querySelector('.osd-menu-settings').addEventListener('click', openSettings);
     document.querySelectorAll('[data-color]').forEach(input => {
       input.addEventListener('input', () => {
         editTarget().colors[input.dataset.color] = input.value;
@@ -766,6 +780,51 @@
       setField('fpsCurrent', show(fps?.current));
       setField('fpsAverage', show(fps?.average));
       setField('fpsLow', show(fps?.low));
+      const milliseconds = value => (Number.isFinite(value) ? `${value.toFixed(1)} ms` : '--');
+      const cpuBusy = milliseconds(fps?.cpuBusy);
+      const gpuBusy = milliseconds(fps?.gpuBusy);
+      const clickToPhoton = milliseconds(fps?.clickToPhotonLatency);
+      const videoBusy = milliseconds(fps?.videoBusy);
+      const presentation = [
+        fps?.presentMode,
+        Number.isFinite(fps?.syncInterval) ? `Sync ${fps.syncInterval}` : null,
+        fps?.allowsTearing === true ? 'Tearing allowed' : fps?.allowsTearing === false ? 'No tearing' : null,
+      ].filter(Boolean).join(' · ') || '--';
+      setField('cpuBusy', cpuBusy);
+      setField('gpuBusy', gpuBusy);
+      setField('clickToPhoton', clickToPhoton);
+      setField('syncInfo', presentation);
+      setField('frameType', fps?.frameType || '--');
+      setField('videoBusy', videoBusy);
+      document.getElementById('fps-busy-summary').textContent = cpuBusy === '--' && gpuBusy === '--'
+        ? '--'
+        : `${cpuBusy} / ${gpuBusy}`;
+      document.getElementById('fps-click-to-photon').textContent = clickToPhoton;
+      document.getElementById('fps-presentation').textContent = presentation;
+      document.getElementById('fps-frame-type').textContent = fps?.frameType || '--';
+      const meanFrameTime = raw?.frametimes?.length
+        ? raw.frametimes.reduce((sum, value) => sum + value, 0) / raw.frametimes.length
+        : null;
+      let diagnosis = 'CPU/GPU limit data unavailable.';
+      if (Number.isFinite(meanFrameTime) && Number.isFinite(fps?.cpuBusy) && Number.isFinite(fps?.gpuBusy)) {
+        const cpuRatio = fps.cpuBusy / meanFrameTime;
+        const gpuRatio = fps.gpuBusy / meanFrameTime;
+        if (gpuRatio >= 0.85 && cpuRatio <= 0.65) diagnosis = 'Heuristic: likely GPU-limited';
+        else if (cpuRatio >= 0.85 && gpuRatio <= 0.65) diagnosis = 'Heuristic: likely CPU-limited';
+        else diagnosis = 'Heuristic: no clear CPU/GPU limit';
+      }
+      document.getElementById('fps-diagnosis').textContent = diagnosis;
+      const optionalRows = {
+        cpuBusy: Number.isFinite(fps?.cpuBusy),
+        gpuBusy: Number.isFinite(fps?.gpuBusy),
+        clickToPhoton: Number.isFinite(fps?.clickToPhotonLatency),
+        syncInfo: presentation !== '--',
+        frameType: Boolean(fps?.frameType),
+        videoBusy: Number.isFinite(fps?.videoBusy),
+      };
+      Object.entries(optionalRows).forEach(([row, unavailable]) => {
+        document.querySelectorAll(`[data-row="${row}"]`).forEach(element => element.classList.toggle('unavailable', !unavailable));
+      });
       document.getElementById('fps-value').textContent = show(fps?.current);
       document.getElementById('fps-average').textContent = show(fps?.average);
       document.getElementById('fps-low').textContent = show(fps?.low);
@@ -841,7 +900,9 @@
     const unsubscribeStats = statsApi.onStatsUpdate(stats => {
       document.getElementById('cpu-value').textContent = stats.cpu.usage;
       document.getElementById('cpu-name').textContent = stats.cpu.name;
-      document.getElementById('cpu-cores').textContent = `${stats.cpu.cores || '--'} cores`;
+      document.getElementById('cpu-cores').textContent = stats.cpu.rig
+        ? `${stats.cpu.rig.tier} \u00b7 ${stats.cpu.rig.allocation} \u00b7 ${stats.cpu.rig.memory} RAM`
+        : `${stats.cpu.cores || '--'} cores`;
       setField('cpuName', stats.cpu.name);
       setMeter('cpu-meter', stats.cpu.usage);
 
@@ -1296,6 +1357,8 @@
     statsApi.onShortcut?.(action => {
       if (action === 'edit-on') document.body.classList.add('osd-editing');
       if (action === 'edit-off') document.body.classList.remove('osd-editing');
+      if (action === 'menu-on') quickMenu.hidden = false;
+      if (action === 'menu-off') quickMenu.hidden = true;
       if (action === 'customize') openSettings();
       if (action === 'minimal') {
         const profile = appliedProfile();
@@ -1311,6 +1374,7 @@
       minimal: 'Switch the overlay between full and minimal',
       toggle: 'Hide or show the overlay',
       edit: 'Unlock the overlay to move and resize it',
+      menu: 'Open quick overlay controls',
     };
     const keybindStatus = document.getElementById('keybind-status');
 
@@ -1428,6 +1492,7 @@
       if (stats.gpu.clock !== null) gpu.push(`${stats.gpu.clock} MHz`);
       lines.push(`GPU: ${gpu.join(' \u00b7 ')}`);
       lines.push(`CPU: ${stats.cpu.name} \u00b7 ${stats.cpu.usage}%`);
+      if (stats.cpu.rig) lines.push(`Rig: ${stats.cpu.rig.rig} \u00b7 ${stats.cpu.rig.tier} \u00b7 ${stats.cpu.rig.allocation}`);
       lines.push(`RAM: ${formatBytes(stats.memory.used)} / ${formatBytes(stats.memory.total)}`);
       if (fps) lines.push(`FPS: ${Math.min(fps.current, cap)} (avg ${Math.min(fps.average, cap)}, 1% low ${Math.min(fps.low, cap)})`);
       return lines.join('\n');

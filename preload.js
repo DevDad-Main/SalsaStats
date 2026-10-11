@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const channels = {
   setMode: 'window:mode',
   setAnchor: 'window:anchor',
+  setOverlayMenu: 'window:overlay-menu',
   setOverlayAboveGames: 'window:overlay-above-games',
   setScale: 'window:scale',
   moveWindow: 'window:move',
@@ -15,6 +16,7 @@ const channels = {
 contextBridge.exposeInMainWorld('salsaStats', {
   setMode: mode => ipcRenderer.send(channels.setMode, mode),
   setAnchor: (anchor, reset = false) => ipcRenderer.send(channels.setAnchor, anchor, reset),
+  setOverlayMenu: open => ipcRenderer.send(channels.setOverlayMenu, open),
   setOverlayAboveGames: enabled => ipcRenderer.send(channels.setOverlayAboveGames, enabled),
   setScale: scale => ipcRenderer.send(channels.setScale, scale),
   setOverlayHeight: height => ipcRenderer.send('window:height', height),

@@ -40,10 +40,11 @@ let currentUpdateState = { status: 'idle' };
 let frameCapture;
 let autoOverlay = false;
 let gameActive = false;
+let overlayMenuOpen = false;
 
 function applyAutoOverlay() {
   if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
-  if (!autoOverlay || gameActive) {
+  if (!autoOverlay || gameActive || overlayMenuOpen) {
     if (!mainWindow.isVisible()) mainWindow.showInactive();
   } else if (mainWindow.isVisible()) {
     mainWindow.hide();
@@ -701,7 +702,7 @@ function applyWindowStacking() {
   // A focusable overlay steals activation, which makes fullscreen games minimise.
   mainWindow.setFocusable(!overlay);
   // Click-through so the overlay never intercepts the mouse while gaming; edit mode lets it be moved.
-  mainWindow.setIgnoreMouseEvents(overlay && !overlayEditMode);
+  mainWindow.setIgnoreMouseEvents(overlay && !overlayEditMode && !overlayMenuOpen);
   mainWindow.setAlwaysOnTop(overlay || pinned, forceAboveGames ? 'screen-saver' : 'floating');
   if (forceAboveGames) mainWindow.moveTop();
 }
@@ -722,6 +723,10 @@ registerWindowHandler('window:mode', mode => {
   const previous = currentMode;
   currentMode = ['compact', 'overlay'].includes(mode) ? mode : 'full';
   if (previous !== 'overlay' && previous !== currentMode) modeBounds[previous] = mainWindow.getBounds();
+  if (currentMode !== 'overlay' && overlayMenuOpen) {
+    overlayMenuOpen = false;
+    mainWindow.webContents.send('shortcut', 'menu-off');
+  }
   if (currentMode !== 'overlay') overlayEditMode = false;
   if (currentMode === 'compact') {
     mainWindow.setMinimumSize(320, 210);
@@ -748,6 +753,14 @@ registerWindowHandler('window:anchor', (anchor, reset) => {
     saveOverlayPosition();
   }
   positionOverlay();
+});
+
+registerWindowHandler('window:overlay-menu', open => {
+  if (currentMode !== 'overlay') return;
+  overlayMenuOpen = open === true;
+  applyWindowStacking();
+  mainWindow.webContents.send('shortcut', overlayMenuOpen ? 'menu-on' : 'menu-off');
+  applyAutoOverlay();
 });
 
 registerWindowHandler('window:scale', scaleValue => {
@@ -858,6 +871,7 @@ const DEFAULT_SHORTCUTS = {
   minimal: 'CommandOrControl+Alt+M',
   toggle: 'CommandOrControl+Alt+H',
   edit: 'CommandOrControl+Alt+E',
+  menu: 'CommandOrControl+Alt+I',
 };
 let shortcuts = { ...DEFAULT_SHORTCUTS };
 let shortcutHandlers = {};
@@ -974,6 +988,14 @@ function registerShortcuts() {
       }
       applyWindowStacking();
       send(overlayEditMode ? 'edit-on' : 'edit-off');
+    },
+    menu: () => {
+      if (!mainWindow || mainWindow.isDestroyed() || currentMode !== 'overlay') return;
+      overlayMenuOpen = !overlayMenuOpen;
+      if (overlayMenuOpen && !mainWindow.isVisible()) mainWindow.showInactive();
+      applyWindowStacking();
+      send(overlayMenuOpen ? 'menu-on' : 'menu-off');
+      applyAutoOverlay();
     },
     toggle: () => {
       if (!mainWindow || mainWindow.isDestroyed()) return;

@@ -1,16 +1,22 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  parseCimDiskCounters,
+  parseCimGpuEngineOutput,
+  parseCimGpuMemoryRows,
+  parseCimGpuNames,
   parseNvidiaSmiOutput,
-  parseTypeperfGpuMemoryOutput,
-  parseWmiGpuAdapterMemoryListOutput,
-  parseWmiGpuAdapterMemoryOutput,
-  parseWmiGpuEngineOutput,
-  parseWmiGpuNames,
   resolveCpuName,
+  resolveGfnRig,
   selectGpuController,
   selectPhysicalGpuName,
 } = require('../stats');
+
+test('maps auto-detected RTX names to GeForce NOW rigs', () => {
+  assert.equal(resolveGfnRig('NVIDIA GeForce RTX 5080').tier, 'Ultimate');
+  assert.match(resolveGfnRig('NVIDIA GeForce RTX 4080').cpu, /Threadripper/);
+  assert.equal(resolveGfnRig('NVIDIA GeForce GTX 1060'), null);
+});
 
 test('uses the operating system CPU model when systeminformation omits the brand', () => {
   assert.equal(resolveCpuName({ brand: '', manufacturer: 'AMD' }, 'AMD Ryzen 7 Processor'), 'AMD Ryzen 7 Processor');
@@ -52,13 +58,12 @@ test('does not report a virtual display driver as the GPU', () => {
   ]), {});
 });
 
-test('parses WMI names and selects the physical adapter', () => {
-  const names = parseWmiGpuNames([
-    'Node=GFN-SESSION',
-    'Name=RealVNC VNC Mirror Driver',
-    'Name=Microsoft Basic Display Adapter',
-    'Name=NVIDIA GeForce RTX 5080',
-  ].join('\r\n'));
+test('parses CIM GPU names and selects the physical adapter', () => {
+  const names = parseCimGpuNames([
+    { Name: 'RealVNC VNC Mirror Driver' },
+    { Name: 'Microsoft Basic Display Adapter' },
+    { Name: 'NVIDIA GeForce RTX 5080' },
+  ]);
 
   assert.deepEqual(names, [
     'RealVNC VNC Mirror Driver',
@@ -85,82 +90,40 @@ test('parses NVIDIA-SMI utilization and sensor readings', () => {
   ).utilizationGpu, null);
 });
 
-test('aggregates WMI GPU engine utilization by adapter and engine type', () => {
-  const output = [
-    'Node,Name,UtilizationPercentage',
-    'GFN,GEFORCE-NOW,pid_812_luid_0x0000_phys_0_eng_8_engtype_3D,20',
-    'GFN,AnotherProcess,pid_912_luid_0x0000_phys_0_eng_9_engtype_3D,35',
-    'GFN,GEFORCE-NOW,pid_812_luid_0x0000_phys_0_eng_10_engtype_VideoDecode,12',
-  ].join('\r\n');
+test('aggregates CIM GPU engine utilization by adapter and engine type', () => {
+  const rows = [
+    { Name: 'pid_812_luid_0x0000_phys_0_eng_8_engtype_3D', UtilizationPercentage: 20 },
+    { Name: 'pid_912_luid_0x0000_phys_0_eng_9_engtype_3D', UtilizationPercentage: 35 },
+    { Name: 'pid_812_luid_0x0000_phys_0_eng_10_engtype_VideoDecode', UtilizationPercentage: 12 },
+  ];
 
-  assert.equal(parseWmiGpuEngineOutput(output), 55);
-  assert.equal(parseWmiGpuEngineOutput('Node,Name,UtilizationPercentage\r\n'), null);
+  assert.equal(parseCimGpuEngineOutput(rows), 55);
+  assert.equal(parseCimGpuEngineOutput([]), null);
 });
 
-test('converts WMI dedicated GPU memory counters from bytes to MiB', () => {
-  const output = [
-    'Node,Name,DedicatedUsage,SharedUsage,TotalCommitted',
-    'GFN,luid_0x0000_phys_0,2147483648,0,2147483648',
-  ].join('\r\n');
+test('selects CIM dedicated GPU memory usage and converts bytes to MiB', () => {
+  const rows = [
+    { Name: 'luid_0x0000_phys_0', DedicatedUsage: 2147483648 },
+    { Name: 'luid_0x0001_phys_0', DedicatedUsage: 1073741824 },
+  ];
 
-  assert.deepEqual(parseWmiGpuAdapterMemoryOutput(output), {
+  assert.deepEqual(parseCimGpuMemoryRows(rows), {
     memoryUsed: 2048,
     memoryTotal: null,
     adapterName: 'luid_0x0000_phys_0',
   });
 });
 
-test('parses the GeForce NOW list-format adapter-memory output with multiple adapters', () => {
-  const output = [
-    'Caption=',
-    'DedicatedUsage=2377986048',
-    'Description=',
-    'Frequency_Object=',
-    'Frequency_PerfTime=',
-    'Frequency_Sys100NS=',
-    'Name=luid_0x00000000_0x0016DEE9_phys_0',
-    'SharedUsage=396124160',
-    'Timestamp_Object=',
-    'Timestamp_PerfTime=',
-    'Timestamp_Sys100NS=',
-    'TotalCommitted=2989006848',
-    '',
-    'Caption=',
-    'DedicatedUsage=0',
-    'Description=',
-    'Name=luid_0x00000000_0x0000EEE6_phys_0',
-    'SharedUsage=16384',
-    'TotalCommitted=13684736',
-    '',
-  ].join('\r\n');
-
-  assert.deepEqual(parseWmiGpuAdapterMemoryListOutput(output), {
-    memoryUsed: 2377986048 / 1024 ** 2,
-    memoryTotal: null,
-    adapterName: 'luid_0x00000000_0x0016DEE9_phys_0',
+test('reads aggregate disk counters from CIM rows', () => {
+  assert.deepEqual(parseCimDiskCounters([
+    { Name: '0 C:', DiskReadBytesPersec: 100, DiskWriteBytesPersec: 200 },
+    { Name: '_Total', DiskReadBytesPersec: 1048576, DiskWriteBytesPersec: 2097152 },
+  ]), {
+    diskReadMBps: 1,
+    diskWriteMBps: 2,
   });
-});
-
-test('parses typeperf GPU adapter memory output and picks the busiest adapter', () => {
-  const output = [
-    '"(PDH-CSV 4.0)","\\\\GEFORCE-NOW\\GPU Adapter Memory(luid_0x00000000_0x0000EEE6_phys_0)\\Dedicated Usage","\\\\GEFORCE-NOW\\GPU Adapter Memory(luid_0x00000000_0x0016DEE9_phys_0)\\Dedicated Usage"',
-    '"10/09/2026 23:00:04.197","0.000000","2350751744.000000"',
-    '"10/09/2026 23:00:05.198","0.000000","2350751744.000000"',
-    '',
-    'The command completed successfully.',
-    '',
-  ].join('\r\n');
-
-  assert.deepEqual(parseTypeperfGpuMemoryOutput(output), {
-    memoryUsed: 2350751744 / 1024 ** 2,
-    memoryTotal: null,
-    adapterName: 'luid_0x00000000_0x0016DEE9_phys_0',
+  assert.deepEqual(parseCimDiskCounters([]), {
+    diskReadMBps: null,
+    diskWriteMBps: null,
   });
-});
-test('parses wmic csv output into rows', () => {
-  const { parseWmiCsv } = require('../stats');
-  const rows = parseWmiCsv('Node,DiskReadBytesPersec,DiskWriteBytesPersec,Name\r\nPC,1048576,2097152,_Total\r\n');
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].Name, '_Total');
-  assert.equal(Number(rows[0].DiskReadBytesPersec), 1048576);
 });

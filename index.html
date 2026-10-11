@@ -94,6 +94,13 @@
             <div><div class="fps-stat-label">Average FPS</div><div class="fps-stat-value" id="fps-average">--</div></div>
             <div><div class="fps-stat-label">1% low</div><div class="fps-stat-value" id="fps-low">--</div></div>
           </div>
+          <div class="fps-analysis">
+            <div><span>CPU / GPU busy</span><strong id="fps-busy-summary">--</strong></div>
+            <div><span>Click-to-photon</span><strong id="fps-click-to-photon">--</strong></div>
+            <div><span>Presentation</span><strong id="fps-presentation">--</strong></div>
+            <div><span>Frame type</span><strong id="fps-frame-type">--</strong></div>
+          </div>
+          <p class="fps-diagnosis" id="fps-diagnosis">Waiting for PresentMon timing data.</p>
         </div>
       </article>
     </section>
@@ -152,6 +159,18 @@
               <label class="check-option"><input type="checkbox" data-setting="fpsLow">1% low</label>
               <label class="check-option"><input type="checkbox" data-setting="graphRate">Framerate graph</label>
               <label class="check-option"><input type="checkbox" data-setting="graphTime">Frametime graph</label>
+            </div>
+          </section>
+          <section class="settings-group">
+            <h3>Frame analysis</h3>
+            <p class="setting-note">Optional PresentMon fields. Click-to-photon is measured in the game session and does not include GeForce NOW network or client-display latency. CPU/GPU limit is a heuristic.</p>
+            <div class="settings-options">
+              <label class="check-option"><input type="checkbox" data-setting="cpuBusy">CPU busy time</label>
+              <label class="check-option"><input type="checkbox" data-setting="gpuBusy">GPU busy time</label>
+              <label class="check-option"><input type="checkbox" data-setting="clickToPhoton">Click-to-photon</label>
+              <label class="check-option"><input type="checkbox" data-setting="syncInfo">Present mode / sync</label>
+              <label class="check-option"><input type="checkbox" data-setting="frameType">Frame type</label>
+              <label class="check-option"><input type="checkbox" data-setting="videoBusy">GPU video busy</label>
             </div>
           </section>
           <section class="settings-group">
@@ -310,6 +329,24 @@
   <section class="overlay-mode" id="overlay-mode" aria-label="Performance overlay">
     <div class="osd-shell" id="osd-panel">
       <div class="osd-edit-hint">Drag to move · corner resizes · bottom edge spaces the groups · Ctrl+Alt+E to lock</div>
+      <section class="osd-quick-menu" hidden aria-label="Quick overlay settings">
+        <header class="osd-quick-menu-header">
+          <strong>Quick overlay</strong>
+          <button class="osd-menu-close" type="button" aria-label="Close quick overlay menu" title="Close">&times;</button>
+        </header>
+        <div class="osd-menu-options">
+          <label><input type="checkbox" data-menu-setting="gpuUsage">GPU load</label>
+          <label><input type="checkbox" data-menu-setting="gpuTemp">GPU temperature</label>
+          <label><input type="checkbox" data-menu-setting="cpuUsage">CPU load</label>
+          <label><input type="checkbox" data-menu-setting="fpsCurrent">Current FPS</label>
+          <label><input type="checkbox" data-menu-setting="fpsLow">1% low</label>
+          <label><input type="checkbox" data-menu-setting="graphTime">Frametime graph</label>
+          <label><input type="checkbox" data-menu-setting="cpuBusy">CPU busy time</label>
+          <label><input type="checkbox" data-menu-setting="gpuBusy">GPU busy time</label>
+          <label><input type="checkbox" data-menu-setting="clickToPhoton">Session latency</label>
+        </div>
+        <button class="window-action osd-menu-settings" type="button">Open overlay settings</button>
+      </section>
       <div class="osd-grip" data-corner="nw" aria-hidden="true"></div>
       <div class="osd-grip" data-corner="ne" aria-hidden="true"></div>
       <div class="osd-grip" data-corner="sw" aria-hidden="true"></div>
@@ -343,6 +380,12 @@
         <div class="osd-row" data-row="fpsCurrent"><span class="osd-label">FPS</span><span class="osd-value"><span data-field="fpsCurrent">--</span><span class="osd-unit"></span></span></div>
         <div class="osd-row" data-row="fpsAverage"><span class="osd-label">AVG</span><span class="osd-value"><span data-field="fpsAverage">--</span><span class="osd-unit"></span></span></div>
         <div class="osd-row" data-row="fpsLow"><span class="osd-label">1% Low</span><span class="osd-value"><span data-field="fpsLow">--</span><span class="osd-unit"></span></span></div>
+        <div class="osd-row" data-row="cpuBusy"><span class="osd-label">CPU Busy</span><span class="osd-value" data-field="cpuBusy">--</span></div>
+        <div class="osd-row" data-row="gpuBusy"><span class="osd-label">GPU Busy</span><span class="osd-value" data-field="gpuBusy">--</span></div>
+        <div class="osd-row" data-row="clickToPhoton"><span class="osd-label">Click-Photon</span><span class="osd-value" data-field="clickToPhoton">--</span></div>
+        <div class="osd-row" data-row="syncInfo"><span class="osd-label">Present</span><span class="osd-value" data-field="syncInfo">--</span></div>
+        <div class="osd-row" data-row="frameType"><span class="osd-label">Frame Type</span><span class="osd-value" data-field="frameType">--</span></div>
+        <div class="osd-row" data-row="videoBusy"><span class="osd-label">Video Busy</span><span class="osd-value" data-field="videoBusy">--</span></div>
         <p class="osd-note" data-row="fpsNote">Game capture unavailable</p>
         <div class="osd-chart-block" data-row="graphRate"><div class="osd-chart-heading"><span>Framerate</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="rate"></canvas></div>
         <div class="osd-chart-block" data-row="graphTime"><div class="osd-chart-heading"><span>Frametime</span><span data-field="fpsSource">No capture source</span></div><canvas class="osd-chart" data-chart="time"></canvas></div>

@@ -3,6 +3,36 @@ const test = require('node:test');
 const { createFrameTracker, pickDisplayName } = require('../presentmon');
 
 const HEADER = 'Application,ProcessID,SwapChainAddress,MsBetweenPresents';
+const DETAIL_HEADER = `${HEADER},MsCPUBusy,MsGPUBusy,MsClickToPhotonLatency,SyncInterval,AllowsTearing,PresentMode,FrameType,VideoBusy`;
+
+test('retains optional timing, sync, frame-type, and video metrics', () => {
+  const tracker = createFrameTracker();
+  tracker.ingestLine(DETAIL_HEADER, 0);
+  for (let index = 0; index < 10; index += 1) {
+    tracker.ingestLine(`game.exe,10,0x1,16.7,5,12,22,1,true,Hardware: Independent Flip,${index < 8 ? 'Application' : 'Generated'},3`, 1000 + index * 10);
+  }
+
+  const result = tracker.snapshot(1100);
+  assert.equal(result.cpuBusy, 5);
+  assert.equal(result.gpuBusy, 12);
+  assert.equal(result.clickToPhotonLatency, 22);
+  assert.equal(result.syncInterval, 1);
+  assert.equal(result.allowsTearing, true);
+  assert.equal(result.presentMode, 'Hardware: Independent Flip');
+  assert.equal(result.frameType, 'Generated');
+  assert.equal(result.videoBusy, 3);
+});
+
+test('keeps optional PresentMon metrics null when columns or values are absent', () => {
+  const tracker = createFrameTracker();
+  tracker.ingestLine(HEADER, 0);
+  for (let index = 0; index < 4; index += 1) tracker.ingestLine(`game.exe,10,0x1,16.7`, 1000 + index * 10);
+
+  const result = tracker.snapshot(1040);
+  assert.equal(result.cpuBusy, null);
+  assert.equal(result.clickToPhotonLatency, null);
+  assert.equal(result.presentMode, null);
+});
 
 test('reports fps, average and 1% low for the busiest game process', () => {
   const tracker = createFrameTracker();

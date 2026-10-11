@@ -17,6 +17,20 @@ function resolveCpuName(cpuInfo, systemCpuModel) {
   return cpuInfo.brand || systemCpuModel || cpuInfo.manufacturer || 'Processor';
 }
 
+const TR_PRO = 'AMD Ryzen Threadripper PRO 5955WX 16-Core (Zen3)';
+const EPYC = 'AMD EPYC 9375F 32-Core (Zen5)';
+const GFN_RIGS = [
+  { match: /RTX 3050/i, rig: '3050b (RTX 3050)', tier: 'Free', cpu: TR_PRO, allocation: '5C/5T', memory: '8GB / 14GB', vram: '6GB' },
+  { match: /RTX 3060/i, rig: '3060d (RTX 3060)', tier: 'Performance', cpu: TR_PRO, allocation: '4C/8T', memory: '28GB', vram: '12GB' },
+  { match: /RTX 5080/i, rig: '5080h (RTX 5080)', tier: 'Ultimate', cpu: EPYC, allocation: '8C/16T', memory: '56GB', vram: '48GB' },
+  { match: /RTX 4080/i, rig: '4080h (RTX 4080)', tier: 'Ultimate', cpu: TR_PRO, allocation: '8C/16T', memory: '56GB', vram: '24GB' },
+];
+
+function resolveGfnRig(gpuName) {
+  const name = String(gpuName || '');
+  return GFN_RIGS.find(entry => entry.match.test(name)) || null;
+}
+
 function decodeProcessOutput(output) {
   const buffer = Buffer.isBuffer(output) ? output : Buffer.from(String(output || ''), 'utf8');
   if (buffer[0] === 0xff && buffer[1] === 0xfe) {
@@ -36,11 +50,13 @@ function decodeProcessOutput(output) {
   return buffer.toString('utf8').replace(/^\uFEFF/, '');
 }
 
-function parseWmiGpuNames(output) {
-  return decodeProcessOutput(output)
-    .split(/\r?\n/)
-    .map(line => line.match(/^\s*Name\s*=\s*(.*?)\s*$/i)?.[1])
-    .filter(Boolean);
+function normalizeRows(rows) {
+  if (Array.isArray(rows)) return rows;
+  return rows && typeof rows === 'object' ? [rows] : [];
+}
+
+function parseCimGpuNames(rows) {
+  return normalizeRows(rows).map(row => String(row.Name || '')).filter(Boolean);
 }
 
 function selectPhysicalGpuName(names) {
@@ -48,8 +64,10 @@ function selectPhysicalGpuName(names) {
 }
 
 function parseOptionalNumber(value) {
-  if (!value || /^n\/a$/i.test(value.trim())) return null;
-  const number = Number(value.trim());
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || /^n\/a$/i.test(text)) return null;
+  const number = Number(text);
   return Number.isFinite(number) ? number : null;
 }
 
@@ -70,16 +88,13 @@ function parseNvidiaSmiOutput(output) {
   };
 }
 
-function parseWmiGpuEngineOutput(output) {
+function parseCimGpuEngineOutput(rows) {
   const engineUsage = new Map();
-  for (const line of decodeProcessOutput(output).split(/\r?\n/)) {
-    const separator = line.lastIndexOf(',');
-    if (separator < 0) continue;
-    const utilization = parseOptionalNumber(line.slice(separator + 1));
+  for (const row of normalizeRows(rows)) {
+    const utilization = parseOptionalNumber(row.UtilizationPercentage);
     if (utilization === null) continue;
 
-    const fields = line.slice(0, separator).split(',');
-    const instanceName = fields.slice(1).join(',');
+    const instanceName = String(row.Name || '');
     const engineType = instanceName.match(/engtype_([^,\s]+)/i)?.[1];
     if (!engineType) continue;
     const adapter = instanceName.match(/luid_(.+?)_phys_(\d+)/i);
@@ -103,84 +118,35 @@ function selectMaxMemoryAdapter(adapters) {
   };
 }
 
-function parseWmiGpuAdapterMemoryOutput(output) {
-  const lines = decodeProcessOutput(output).split(/\r?\n/).filter(Boolean);
-  const headers = lines[0]?.split(',').map(value => value.trim().toLowerCase()) || [];
-  const nameIndex = headers.indexOf('name');
-  const usageIndex = headers.indexOf('dedicatedusage');
-  if (usageIndex < 0) return {};
-
-  const adapters = lines.slice(1).map(line => {
-    const fields = line.split(',');
-    return {
-      name: nameIndex < 0 ? '' : fields[nameIndex],
-      memoryUsed: parseOptionalNumber(fields[usageIndex]),
-    };
-  });
-  return selectMaxMemoryAdapter(adapters);
+function parseCimGpuMemoryRows(rows) {
+  return selectMaxMemoryAdapter(normalizeRows(rows).map(row => ({
+    name: row.Name || '',
+    memoryUsed: parseOptionalNumber(row.DedicatedUsage),
+  })));
 }
 
-function parseWmiGpuAdapterMemoryListOutput(output) {
-  const blocks = decodeProcessOutput(output).split(/\r?\n\s*\r?\n/);
-  const adapters = [];
-  for (const block of blocks) {
-    let name = null;
-    let memoryUsed = null;
-    for (const line of block.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Za-z_]+)\s*=\s*(.*?)\s*$/);
-      if (!match) continue;
-      const key = match[1].toLowerCase();
-      if (key === 'name') name = match[2];
-      else if (key === 'dedicatedusage') memoryUsed = parseOptionalNumber(match[2]);
-    }
-    if (name !== null || memoryUsed !== null) adapters.push({ name: name || '', memoryUsed });
-  }
-  return selectMaxMemoryAdapter(adapters);
-}
-
-function parseTypeperfGpuMemoryOutput(output) {
-  const lines = decodeProcessOutput(output)
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.startsWith('"'));
-  if (lines.length < 2) return {};
-
-  const splitRow = line => line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
-  const headers = splitRow(lines[0]);
-  const values = splitRow(lines[1]);
-  const adapters = headers.slice(1).map((header, index) => ({
-    name: header.match(/GPU Adapter Memory\((.+?)\)/i)?.[1] || header,
-    memoryUsed: parseOptionalNumber(values[index + 1]),
-  }));
-  return selectMaxMemoryAdapter(adapters);
+function parseCimDiskCounters(rows) {
+  const total = normalizeRows(rows).find(row => row.Name === '_Total');
+  const readBytesPerSecond = parseOptionalNumber(total?.DiskReadBytesPersec);
+  const writeBytesPerSecond = parseOptionalNumber(total?.DiskWriteBytesPersec);
+  return {
+    diskReadMBps: readBytesPerSecond === null ? null : readBytesPerSecond / 1048576,
+    diskWriteMBps: writeBytesPerSecond === null ? null : writeBytesPerSecond / 1048576,
+  };
 }
 
 async function readGpuAdapterMemory() {
-  const csvOutput = await runGpuCommand('wmic.exe', [
-    'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
-    'get', 'Name,DedicatedUsage,SharedUsage,TotalCommitted', '/format:csv',
-  ]);
-  const csvResult = parseWmiGpuAdapterMemoryOutput(csvOutput);
-  if (Number.isFinite(csvResult.memoryUsed)) return csvResult;
-
-  const listOutput = await runGpuCommand('wmic.exe', [
-    'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
-    'get', '/format:list',
-  ]);
-  const listResult = parseWmiGpuAdapterMemoryListOutput(listOutput);
-  if (Number.isFinite(listResult.memoryUsed)) return listResult;
-
-  const typeperfOutput = await runGpuCommand('typeperf.exe', [
-    '\\GPU Adapter Memory(*)\\Dedicated Usage', '-sc', '1',
-  ]);
-  return parseTypeperfGpuMemoryOutput(typeperfOutput);
+  return parseCimGpuMemoryRows(await readCimRows(
+    'Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory',
+    ['Name', 'DedicatedUsage'],
+  ));
 }
 
-async function runGpuCommand(executable, args) {
+async function runGpuCommand(executable, args, timeout = 3000) {
   try {
     const result = await execFileAsync(executable, args, {
       encoding: 'buffer',
-      timeout: 3000,
+      timeout,
       windowsHide: true,
       maxBuffer: 128 * 1024,
     });
@@ -190,11 +156,22 @@ async function runGpuCommand(executable, args) {
   }
 }
 
-async function readWmiGpuNames() {
-  const output = await runGpuCommand('wmic.exe', [
-    'path', 'Win32_VideoController', 'get', 'Name', '/format:list',
-  ]);
-  return parseWmiGpuNames(output);
+async function readCimRows(className, properties) {
+  const propertyList = properties.join(',');
+  const script = `$ErrorActionPreference='Stop'; $rows = @(Get-CimInstance -ClassName '${className}' | Select-Object -Property ${propertyList}); ConvertTo-Json -InputObject $rows -Compress`;
+  const output = await runGpuCommand('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command', script,
+  ], 5000);
+  if (!output) return [];
+  try {
+    return normalizeRows(JSON.parse(output));
+  } catch {
+    return [];
+  }
+}
+
+async function readGpuNames() {
+  return parseCimGpuNames(await readCimRows('Win32_VideoController', ['Name']));
 }
 
 async function readNvidiaSmiMetrics() {
@@ -251,25 +228,12 @@ function selectGpuController(controllers) {
     .sort((left, right) => right.score - left.score || left.index - right.index)[0].controller;
 }
 
-// Parses `wmic ... /format:csv` output into one object per row.
-function parseWmiCsv(output) {
-  const lines = String(output || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  if (lines.length < 2) return [];
-  const header = lines[0].split(',');
-  return lines.slice(1).map(line => {
-    const fields = line.split(',');
-    return Object.fromEntries(header.map((name, index) => [name, fields[index]]));
-  });
-}
-
-// Disk throughput from Windows performance counters.
+// Disk throughput from Windows performance counters via CIM.
 async function readIoCounters() {
-  const disk = await runGpuCommand('wmic.exe', ['path', 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk', 'get', 'DiskReadBytesPersec,DiskWriteBytesPersec,Name', '/format:csv']);
-  const total = parseWmiCsv(disk).find(row => row.Name === '_Total');
-  return {
-    diskReadMBps: total ? Number(total.DiskReadBytesPersec) / 1048576 : null,
-    diskWriteMBps: total ? Number(total.DiskWriteBytesPersec) / 1048576 : null,
-  };
+  return parseCimDiskCounters(await readCimRows(
+    'Win32_PerfFormattedData_PerfDisk_PhysicalDisk',
+    ['Name', 'DiskReadBytesPersec', 'DiskWriteBytesPersec'],
+  ));
 }
 
 function createStatsReader() {
@@ -278,7 +242,7 @@ function createStatsReader() {
   let lastCpuSensorRefresh = 0;
   let gpuController = {};
   let gpuControllers = [];
-  let gpuWmiAdapters = [];
+  let gpuCimAdapters = [];
   let gpuSmiController = {};
   let gpuCounterMetrics = { usage: null, memoryUsed: null, memoryTotal: null };
   let gpuTelemetrySource = 'unavailable';
@@ -336,8 +300,8 @@ function createStatsReader() {
         gpuController.clockCore,
         gpuController.powerDraw,
       ].some(Number.isFinite);
-      gpuWmiAdapters = !gpuController.model && !gpuController.name
-        ? await readWmiGpuNames()
+      gpuCimAdapters = !gpuController.model && !gpuController.name
+        ? await readGpuNames()
         : [];
       gpuSmiController = systemTelemetry ? {} : await readNvidiaSmiMetrics();
       hasPrimaryGpuTelemetry = systemTelemetry || Object.values(gpuSmiController).some(Number.isFinite);
@@ -348,16 +312,15 @@ function createStatsReader() {
 
     if (!hasPrimaryGpuTelemetry && now - lastGpuCounterRefresh >= GPU_COUNTER_REFRESH_MS) {
       lastGpuCounterRefresh = now;
-      const engineOutput = await runGpuCommand('wmic.exe', [
-        'path', 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
-        'get', 'Name,UtilizationPercentage', '/format:csv',
-      ]);
       gpuCounterMetrics = {
-        usage: parseWmiGpuEngineOutput(engineOutput),
+        usage: parseCimGpuEngineOutput(await readCimRows(
+          'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
+          ['Name', 'UtilizationPercentage'],
+        )),
         ...(await readGpuAdapterMemory()),
       };
       if ([gpuCounterMetrics.usage, gpuCounterMetrics.memoryUsed, gpuCounterMetrics.memoryTotal].some(Number.isFinite)) {
-        gpuTelemetrySource = 'wmi-performance-counters';
+        gpuTelemetrySource = 'windows-performance-counters';
       }
     }
 
@@ -373,7 +336,7 @@ function createStatsReader() {
 
     {
       gpuName = gpuController.model || gpuController.name
-        || gpuSmiController.name || selectPhysicalGpuName(gpuWmiAdapters)
+        || gpuSmiController.name || selectPhysicalGpuName(gpuCimAdapters)
         || 'Graphics device not detected';
       gpuUsage = firstFinite(gpuController.utilizationGpu, gpuSmiController.utilizationGpu, gpuCounterMetrics.usage);
       gpuTemp = firstFinite(gpuController.temperatureGpu, gpuSmiController.temperatureGpu);
@@ -397,7 +360,7 @@ function createStatsReader() {
             controller.powerDraw,
           ].some(Number.isFinite),
         })),
-        ...gpuWmiAdapters.map(name => ({ name, model: name, source: 'wmic', hasTelemetry: false })),
+        ...gpuCimAdapters.map(name => ({ name, model: name, source: 'cim', hasTelemetry: false })),
         ...(gpuSmiController.name
           ? [{ name: gpuSmiController.name, model: gpuSmiController.name, source: 'nvidia-smi', hasTelemetry: gpuTelemetrySource === 'nvidia-smi' }]
           : []),
@@ -423,9 +386,12 @@ function createStatsReader() {
       }
     }
 
+    const gfnRig = resolveGfnRig(gpuName);
+
     return {
       cpu: {
-        name: resolveCpuName(cpuInfo, os.cpus().find(cpu => cpu.model)?.model),
+        name: gfnRig?.cpu || resolveCpuName(cpuInfo, os.cpus().find(cpu => cpu.model)?.model),
+        rig: gfnRig ? { rig: gfnRig.rig, tier: gfnRig.tier, allocation: gfnRig.allocation, memory: gfnRig.memory, vram: gfnRig.vram } : null,
         cores: cpuInfo.physicalCores || cpuInfo.cores || 0,
         perCore: Array.isArray(load.cpus) ? load.cpus.map(core => Math.round(core.load || 0)) : [],
         usage: Math.round(load.currentLoad || 0),
@@ -457,14 +423,13 @@ function createStatsReader() {
 
 module.exports = {
   createStatsReader,
-  parseWmiCsv,
   parseNvidiaSmiOutput,
-  parseTypeperfGpuMemoryOutput,
-  parseWmiGpuAdapterMemoryListOutput,
-  parseWmiGpuAdapterMemoryOutput,
-  parseWmiGpuEngineOutput,
-  parseWmiGpuNames,
+  parseCimDiskCounters,
+  parseCimGpuEngineOutput,
+  parseCimGpuMemoryRows,
+  parseCimGpuNames,
   resolveCpuName,
+  resolveGfnRig,
   selectGpuController,
   selectPhysicalGpuName,
 };
