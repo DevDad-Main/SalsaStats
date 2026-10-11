@@ -17,7 +17,9 @@ const SHUTDOWN_TIMEOUT_MS = 8000;
 const FATAL_DIALOG_TIMEOUT_MS = 30000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const readStats = createStatsReader();
-const readStream = createStreamLogReader();
+const readStream = createStreamLogReader(undefined, undefined, status => {
+  logger.writeSync('info', 'GeForce NOW stream log status changed.', { status });
+});
 const logger = createLogger({ fallbackDirectory: path.join(process.cwd(), 'logs') });
 
 let mainWindow;

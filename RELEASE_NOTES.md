@@ -1,3 +1,8 @@
+# SalsaStats 1.0.38
+
+- Fixed the GeForce NOW STREAM readout not appearing: the session is now detected by the streamer log growing instead of its last-modified time, which Windows reports late for a log that is being written.
+- The Logs panel now records why the stream readout is unavailable.
+
 # SalsaStats 1.0.37
 
 - Closing the window now hides SalsaStats to a tray icon. Click it to restore, or use its menu to show, hide or quit.

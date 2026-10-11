@@ -92,9 +92,11 @@ function parseStreamLog(text) {
   return result;
 }
 
-function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_LOG_PATH) {
+function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_LOG_PATH, onStatus = null) {
   let sticky = {};
   let lastSize = 0;
+  let lastGrowth = Date.now();
+  let lastStatus = null;
   let lastPoll = 0;
   let cached = null;
   let client = {};
@@ -128,37 +130,47 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
     }
   }
 
-  function readTail(size) {
+  function readTail(fd, size) {
     const length = Math.min(size, lastSize === 0 ? FIRST_READ_BYTES : TAIL_READ_BYTES);
     const buffer = Buffer.alloc(length);
-    const fd = fs.openSync(logPath, 'r');
-    try {
-      fs.readSync(fd, buffer, 0, length, size - length);
-    } finally {
-      fs.closeSync(fd);
-    }
+    fs.readSync(fd, buffer, 0, length, size - length);
     return buffer.toString('utf8');
   }
 
+  function setStatus(status) {
+    if (status === lastStatus) return;
+    lastStatus = status;
+    if (onStatus) onStatus(status);
+  }
+
+  // File times on a log held open by another process lag behind, so liveness comes from growth.
   return function readStream(now = Date.now()) {
     if (now - lastPoll < POLL_MS) return cached;
     lastPoll = now;
+    let fd;
     try {
-      const { size, mtimeMs } = fs.statSync(logPath);
-      if (now - mtimeMs > STALE_MS || size === 0) {
+      fd = fs.openSync(logPath, 'r');
+      const { size } = fs.fstatSync(fd);
+      if (size !== lastSize) lastGrowth = now;
+      if (size === 0 || now - lastGrowth > STALE_MS) {
         cached = null;
         sticky = {};
         lastSize = 0;
+        setStatus('idle');
         return cached;
       }
       if (size < lastSize) sticky = {};
       readClient(now);
-      const parsed = parseStreamLog(readTail(size));
+      const parsed = parseStreamLog(readTail(fd, size));
       lastSize = size;
       sticky = { ...sticky, ...parsed };
       cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client } : null;
-    } catch {
+      setStatus(cached ? 'ok' : 'no-qos-data');
+    } catch (error) {
       cached = null;
+      setStatus(`error:${error.code || error.message}`);
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
     }
     return cached;
   };
