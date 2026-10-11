@@ -225,6 +225,7 @@
       document.getElementById('border-setting').checked = E.border !== false;
       document.getElementById('start-overlay').checked = settings.startInOverlay === true;
       document.getElementById('auto-overlay').checked = settings.autoOverlay === true;
+      document.getElementById('overlay-animations').checked = settings.overlayAnimations !== false;
       document.querySelectorAll('[data-min]').forEach(input => {
         const value = E.minimalLook[input.dataset.min];
         if (input.type === 'checkbox') input.checked = value !== false;
@@ -976,6 +977,7 @@
       'salsanow-startup': 'Adds SalsaStats to the SalsaNOW startup batch file (I:\\Apps\\SalsaNOW\\StartupBatch.bat) so it starts with every session. Your other commands in that file are kept. If SalsaStats ever ends early in several sessions in a row, the line pauses itself so your session still opens, and you can resume it here.',
       'start-overlay': 'Skips the dashboard and opens the overlay at launch.',
       'auto-overlay': 'Keeps the overlay hidden until a game starts presenting frames.',
+      'overlay-animations': 'Plays a bouncy animation when the overlay appears or disappears. Respects "Reduce motion" in Windows accessibility settings.',
       'overlay-above-games': 'Forces the overlay above fullscreen games. Turn it off if a game minimizes.',
     };
     Object.entries(CONTROL_HINTS).forEach(([id, text]) => {
@@ -1183,6 +1185,7 @@
     });
 
     let lastFitHeight = 0;
+    let isAnimatingMode = false;
     function fitOverlayHeight() {
       if (!document.body.classList.contains('overlay')) return;
       const height = Math.ceil(osdPanel.getBoundingClientRect().height) + 16;
@@ -1193,24 +1196,66 @@
     new ResizeObserver(fitOverlayHeight).observe(osdPanel);
 
     function setMode(mode) {
-      document.body.classList.toggle('compact', mode === 'compact');
-      document.body.classList.toggle('overlay', mode === 'overlay');
-      if (mode !== 'overlay') document.body.classList.remove('osd-editing');
-      modeToggle.textContent = mode === 'compact' ? 'Full view' : 'Compact view';
-      modeToggle.title = mode === 'compact' ? 'Switch to full view' : 'Switch to compact view';
-      overlayToggle.setAttribute('aria-pressed', String(mode === 'overlay'));
-      statsApi.setMode(mode);
-      applySettings();
-      lastFitHeight = 0;
-      if (mode === 'overlay') {
-        statsApi.setAnchor(settings.anchor);
-        statsApi.setScale(lookOf(appliedProfile()).size);
-        requestAnimationFrame(fitOverlayHeight);
+      if (isAnimatingMode) return;
+      const wasOverlay = document.body.classList.contains('overlay');
+      const willBeOverlay = mode === 'overlay';
+      const animationsEnabled = settings.overlayAnimations !== false && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const doSwitch = () => {
+        isAnimatingMode = false;
+        document.body.classList.toggle('compact', mode === 'compact');
+        document.body.classList.toggle('overlay', willBeOverlay);
+        if (!willBeOverlay) document.body.classList.remove('osd-editing');
+        modeToggle.textContent = mode === 'compact' ? 'Full view' : 'Compact view';
+        modeToggle.title = mode === 'compact' ? 'Switch to full view' : 'Switch to compact view';
+        overlayToggle.setAttribute('aria-pressed', String(willBeOverlay));
+        statsApi.setMode(mode);
+        applySettings();
+        lastFitHeight = 0;
+        if (willBeOverlay) {
+          statsApi.setAnchor(settings.anchor);
+          statsApi.setScale(lookOf(appliedProfile()).size);
+          requestAnimationFrame(fitOverlayHeight);
+        }
+        requestAnimationFrame(() => {
+          drawChart();
+          drawOsdCharts();
+        });
+      };
+
+      if (wasOverlay && !willBeOverlay && animationsEnabled) {
+        isAnimatingMode = true;
+        osdPanel.classList.add('overlay-exit-active');
+        osdPanel.addEventListener('animationend', function onExitEnd() {
+          osdPanel.classList.remove('overlay-exit-active');
+          osdPanel.removeEventListener('animationend', onExitEnd);
+          doSwitch();
+        }, { once: true });
+      } else if (!wasOverlay && willBeOverlay && animationsEnabled) {
+        isAnimatingMode = true;
+        document.body.classList.add('overlay');
+        osdPanel.classList.add('overlay-enter-active');
+        osdPanel.addEventListener('animationend', function onEnterEnd() {
+          osdPanel.classList.remove('overlay-enter-active');
+          osdPanel.removeEventListener('animationend', onEnterEnd);
+          isAnimatingMode = false;
+          statsApi.setMode(mode);
+          applySettings();
+          lastFitHeight = 0;
+          statsApi.setAnchor(settings.anchor);
+          statsApi.setScale(lookOf(appliedProfile()).size);
+          requestAnimationFrame(fitOverlayHeight);
+          requestAnimationFrame(() => {
+            drawChart();
+            drawOsdCharts();
+          });
+        }, { once: true });
+        modeToggle.textContent = 'Compact view';
+        modeToggle.title = 'Switch to compact view';
+        overlayToggle.setAttribute('aria-pressed', 'true');
+      } else {
+        doSwitch();
       }
-      requestAnimationFrame(() => {
-        drawChart();
-        drawOsdCharts();
-      });
     }
 
     function refreshCharts() {
@@ -1647,6 +1692,10 @@
     });
     document.getElementById('start-overlay').addEventListener('change', event => {
       settings.startInOverlay = event.target.checked;
+      saveSettings();
+    });
+    document.getElementById('overlay-animations').addEventListener('change', event => {
+      settings.overlayAnimations = event.target.checked;
       saveSettings();
     });
     const loginBox = document.getElementById('login-enabled');
