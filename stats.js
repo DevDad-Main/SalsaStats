@@ -13,6 +13,21 @@ const GPU_REFRESH_MS = 15000;
 const GPU_COUNTER_REFRESH_MS = 5000;
 const VIRTUAL_GPU_PATTERN = /microsoft basic display adapter|vnc mirror driver|virtual|remote display|indirect display/i;
 
+// The streamer log only exists on GeForce NOW sessions.
+const GFN_STREAMER_LOG = path.join(
+  process.env.ProgramData || 'C:\\ProgramData',
+  'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log',
+);
+
+function isGfnSession() {
+  try {
+    const stat = fs.statSync(GFN_STREAMER_LOG);
+    return stat.size > 0;
+  } catch {
+    return false;
+  }
+}
+
 function resolveCpuName(cpuInfo, systemCpuModel) {
   return cpuInfo.brand || systemCpuModel || cpuInfo.manufacturer || 'Processor';
 }
@@ -406,7 +421,7 @@ function createStatsReader() {
       }
     }
 
-    const gfnRig = resolveGfnRig(gpuName);
+    const gfnRig = isGfnSession() ? resolveGfnRig(gpuName) : null;
 
     return {
       cpu: {
@@ -450,6 +465,7 @@ module.exports = {
   parseCimGpuNames,
   resolveCpuName,
   resolveGfnRig,
+  isGfnSession,
   selectGpuController,
   selectPhysicalGpuName,
 };
