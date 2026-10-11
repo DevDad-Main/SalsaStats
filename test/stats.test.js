@@ -6,6 +6,8 @@ const {
   parseCimGpuMemoryRows,
   parseCimGpuNames,
   parseNvidiaSmiOutput,
+  parseVideoEncoderLoad,
+  parseWmicCsv,
   resolveCpuName,
   resolveGfnRig,
   selectGpuController,
@@ -16,6 +18,19 @@ test('maps auto-detected RTX names to GeForce NOW rigs', () => {
   assert.equal(resolveGfnRig('NVIDIA GeForce RTX 5080').tier, 'Ultimate');
   assert.match(resolveGfnRig('NVIDIA GeForce RTX 4080').cpu, /Threadripper/);
   assert.equal(resolveGfnRig('NVIDIA GeForce GTX 1060'), null);
+});
+
+test('parses wmic csv output into rows and feeds the disk and encoder parsers', () => {
+  const disk = parseWmicCsv('\r\r\nNode,DiskReadBytesPersec,DiskWriteBytesPersec,Name\r\r\nGFN,2097152,1048576,_Total\r\r\n');
+  assert.deepEqual(parseCimDiskCounters(disk), { diskReadMBps: 2, diskWriteMBps: 1 });
+  const engines = parseWmicCsv([
+    'Node,Name,UtilizationPercentage',
+    'GFN,pid_1_luid_0x0_0x1_phys_0_eng_3_engtype_VideoEncode,12',
+    'GFN,pid_2_luid_0x0_0x1_phys_0_eng_3_engtype_VideoEncode,8',
+    'GFN,pid_2_luid_0x0_0x1_phys_0_eng_0_engtype_3D,90',
+  ].join('\r\n'));
+  assert.equal(parseVideoEncoderLoad(engines), 20);
+  assert.equal(parseVideoEncoderLoad([]), null);
 });
 
 test('uses the operating system CPU model when systeminformation omits the brand', () => {

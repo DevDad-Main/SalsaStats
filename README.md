@@ -4,13 +4,13 @@
 
 **A clean, click-through performance overlay for Windows and GeForce NOW sessions.**
 
-GPU, CPU, memory and frame rate, always on top, never in your way.
+GPU, CPU, memory, frame rate and stream health, always on top, never in your way.
 
 [![Latest release](https://img.shields.io/github/v/release/DevDad-Main/SalsaStats?style=flat-square&color=6ea8fe)](https://github.com/DevDad-Main/SalsaStats/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/DevDad-Main/SalsaStats/total?style=flat-square&color=3ddc97)](https://github.com/DevDad-Main/SalsaStats/releases)
 [![License](https://img.shields.io/github/license/DevDad-Main/SalsaStats?style=flat-square&color=8b98a9)](#license)
 
-[Download](https://github.com/DevDad-Main/SalsaStats/releases/latest) · [Keybinds](#keybinds) · [Frame rate](#frame-rate) · [Troubleshooting](#troubleshooting)
+[Download](https://github.com/DevDad-Main/SalsaStats/releases/latest) · [Quick start](#quick-start) · [GeForce NOW](#geforce-now) · [Frame rate](#frame-rate) · [Troubleshooting](#troubleshooting)
 
 </div>
 
@@ -26,9 +26,10 @@ It was built for GeForce NOW sessions, including setups made with tools like Sal
 - **Per-game layouts**: give each game its own name and overlay look, applied automatically while it runs
 - **Minimal view** with its own appearance, one keypress away
 - **Real frame rate** with average, 1% low and live graphs, raw or capped to your stream rate
-- **GeForce NOW stream readout**: round trip, stream health, weakest link, codec, resolution and more, read from the session's NVIDIA logs
-- **Rig details**: on GeForce NOW the CPU line shows the specific processor for your rig tier
+- **GeForce NOW rig details**: the specific CPU for your rig tier, plus tier, core allocation and RAM
+- **GeForce NOW stream readout**: round trip, stream health, weakest link, codec, resolution, bandwidth and more
 - **Lives in the tray**: closing the window hides SalsaStats instead of quitting it
+- **Hover tooltips** on every reading and control, with tags for estimates and early-session readings
 - **Everything is configurable**: readings, colours, size, spacing, border and keybinds
 - **Built-in log panel** and one-click updates
 
@@ -38,11 +39,15 @@ It was built for GeForce NOW sessions, including setups made with tools like Sal
 2. Run it. It installs for your user only and doesn't ask for administrator rights.
 3. SalsaStats keeps itself up to date from then on.
 
-The installer isn't code-signed, so Windows SmartScreen may warn you. Choose **More info**, then **Run anyway**.
+> [!NOTE]
+> The installer isn't code-signed, so Windows SmartScreen may warn you. Choose **More info**, then **Run anyway**.
 
 ## Quick start
 
-Open the app and press **Show overlay**. From then on you control it with the keyboard, because the overlay ignores the mouse.
+Open the app and press **Show overlay** in the top bar. From then on you control it with the keyboard, because the overlay ignores the mouse.
+
+> [!TIP]
+> Two buttons sound alike but do different things. **Show overlay** (top bar) switches the app into the in-game overlay. The **Customize overlay** tab is where you choose what the overlay shows and how it looks.
 
 ### Keybinds
 
@@ -52,6 +57,7 @@ Open the app and press **Show overlay**. From then on you control it with the ke
 | `Ctrl` `Alt` `M` | Switch between the full and the minimal overlay |
 | `Ctrl` `Alt` `H` | Hide or show the overlay |
 | `Ctrl` `Alt` `E` | Unlock the overlay to move it and resize it from any corner, then lock it again |
+| `Ctrl` `Alt` `I` | Open the click-through quick menu to toggle readings while you play |
 
 Every one of these can be changed in **Settings → Keybinds**. In the dashboard, `Ctrl` `` ` `` toggles the log panel.
 
@@ -64,24 +70,60 @@ Every one of these can be changed in **Settings → Keybinds**. In the dashboard
 | **Customize overlay** | Choose readings, colours, size, spacing and border, and design the minimal view separately |
 | **Settings** | Updates, keybinds, frame rate mode, window behaviour and the log folder |
 
-In the **Customize overlay** tab, the **Layout for** menu switches between the default layout and any game in your library.
+In the **Customize overlay** tab, the **Layout for** menu switches between the default layout and any game in your library. Hover any option to see what it does.
 
 ### Tray
 
-Closing the window hides SalsaStats to the system tray and keeps it running. Click the tray icon to bring it back, or right-click it for **Show**, **Hide** and **Quit**. Quit from the tray menu to exit completely.
+Closing the window hides SalsaStats to the system tray and keeps it running, so your overlay and game layouts keep working. Click the tray icon to bring it back, or right-click it for **Show**, **Hide** and **Quit**.
 
-## GeForce NOW stream readout
+> [!IMPORTANT]
+> The window's close button only hides the app. Use **Quit** in the tray menu to exit completely.
 
-On a GeForce NOW session SalsaStats reads the NVIDIA streamer logs on the cloud PC and can show a **STREAM** group in the overlay. Turn each reading on in **Customize overlay → GeForce NOW stream**:
+## GeForce NOW
 
-- **Round trip**: the delay between the cloud PC and your client, in milliseconds
-- **Stream quality**, **Network scores** and **Health**: NVIDIA's own 0-100 stream scores
-- **Weakest link**: the lowest scoring part of the stream (GPU, server, visual, decoder, downlink lag, congestion or uplink), shown only when it drops below 90%
-- **Stream resolution**, **Bitrate limit**, **Codec**, **Client / HDR** and **Stream features** (Reflex, cloud G-Sync, L4S)
+SalsaStats runs on the cloud PC, so everything it shows is what that machine sees, not your own device.
 
-These values describe the session as the cloud PC sees it. Raw packet and frame loss counts, Wi-Fi details and live ping are measured on your own device and are not available to SalsaStats. The group is hidden outside a GeForce NOW session.
+### Rig details
 
-**Why some stream readings stop updating.** NVIDIA stops writing the round trip and score lines to the streamer log after roughly 35 minutes of a session. Round trip, quality, scores, health, weakest link, stream FPS and loss dips are therefore only live early in a session. Once they are more than 30 seconds old they are hidden, round trip stays on screen as its last known value with its age for 10 minutes, and **Data age** shows how old they are. Codec, resolution, client details and features are written once at the start and stay. **Bandwidth used** comes from the network adapter and stays live. Stream FPS and loss dips are estimates, not packet counts.
+On a GeForce NOW session the CPU line shows the specific processor for your rig, matched from the detected graphics card, instead of a generic name:
+
+| Detected GPU | Rig | Tier |
+| --- | --- | --- |
+| RTX 3050 | 3050b | Free |
+| RTX 3060 | 3060d | Performance |
+| RTX 4080 | 4080h | Ultimate |
+| RTX 5080 | 5080h | Ultimate |
+
+The CPU card also shows the tier, the core and thread allocation, and the RAM available to your session.
+
+### Stream readout
+
+Turn the **STREAM** group on in **Customize overlay → GeForce NOW stream**. It reads the NVIDIA streamer logs and the network adapter on the cloud PC, and is hidden outside a GeForce NOW session.
+
+| Reading | What it tells you | How long it stays live |
+| --- | --- | --- |
+| **Round trip** | Delay between the cloud PC and your client | Early in a session, then shown as the last known value for 10 minutes |
+| **Quality**, **Network scores**, **Health** | NVIDIA's own 0-100 stream scores | Early in a session |
+| **Weakest link** | The lowest scoring part of the stream, shown only when it drops under 90% | Early in a session |
+| **Stream FPS** | Stream frame rate worked out from log timestamps (an estimate) | Early in a session |
+| **Loss dips** | How many samples had a loss score under 100 (a rough hint, not a packet count) | Early in a session |
+| **Bandwidth used** | Data the cloud PC is sending on the stream network adapter | Always |
+| **Stream resolution**, **Bitrate limit** | Resolution, frame rate and the bitrate cap | Whole session |
+| **Codec**, **Client / HDR**, **Features** | Codec, bit depth, colour format, client version, HDR, Reflex, cloud G-Sync and L4S | Whole session |
+| **Data age** | How old the newest stream score is | Always (off by default) |
+
+> [!WARNING]
+> NVIDIA stops writing the round trip and score lines to the streamer log after roughly 35 minutes of a session. Those readings are only live early on. Once they are more than 30 seconds old they are hidden, and round trip stays as its last known value for 10 minutes. This is a limit of the data NVIDIA exposes, not a bug. Restarting the stream starts a fresh log.
+
+> [!NOTE]
+> Raw packet and frame loss counts, Wi-Fi details and live ping are measured on your own device and are not available to SalsaStats. NVIDIA's own overlay (the one that shows ping and packet loss) is the place to read those.
+
+### System I/O and encoder
+
+**Encoder load** is the video engine load, which on GeForce NOW is the stream being encoded. **Disk read** and **Disk write** are per-second rates in megabytes. They come from Windows performance counters, which SalsaStats reads through PowerShell and falls back to `wmic` on machines where PowerShell is locked down.
+
+> [!TIP]
+> If these rows are blank on your machine, the counters aren't available there. Turn on **Hide readings that are unavailable** and they disappear instead of showing dashes.
 
 ## Frame rate
 
@@ -92,7 +134,13 @@ In **Settings → Frame rate** you can choose:
 - **Raw render FPS**, exactly what the game renders
 - **Cap displayed FPS** (30 to 240), to make SalsaStats' readings easier to compare with a stream rate. This only changes displayed values; it does not limit the game or GeForce NOW stream.
 
-Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Everything else works without it, and the status bar tells you when capture is unavailable.
+The optional **Frame analysis** readings (CPU and GPU busy time, click-to-photon, present mode, frame type, GPU video busy) come from the same capture.
+
+> [!IMPORTANT]
+> Frame capture needs administrator rights, or membership of the Windows "Performance Log Users" group. Right-click SalsaStats and choose **Run as administrator**. Everything else works without it, and the status bar tells you when capture is unavailable.
+
+> [!NOTE]
+> Click-to-photon is measured inside the game session. It does not include GeForce NOW network or client-display latency. The CPU/GPU limit note is a heuristic, not a measurement.
 
 ## Troubleshooting
 
@@ -100,6 +148,9 @@ Frame capture needs administrator rights, or membership of the Windows "Performa
 - **GPU temperature or clock is missing.** Open the log panel from the **Logs** button and check the startup line to see which hardware sources responded.
 - **The overlay hides behind a game.** Exclusive-fullscreen games can cover any overlay. Use borderless or windowed mode.
 - **A game isn't recognised.** Games are matched by executable name, ignoring suffixes like `-Win64-Shipping`. Use **Add running game** for an exact match.
+- **The STREAM group isn't showing.** It only appears on a GeForce NOW session. Untick **Hide readings that are unavailable** to see every row, and check the log panel for the line "GeForce NOW stream log status changed".
+- **Round trip and scores vanished.** See the warning in [Stream readout](#stream-readout). NVIDIA stops logging them after about 35 minutes.
+- **Closing the window didn't quit.** That's the tray behaviour. Use **Quit** from the tray icon's menu.
 
 The log panel has filter, copy, pause and clear buttons, which makes it easy to paste into a bug report. Logs live in `%APPDATA%\salsastats\logs` and rotate automatically. Nothing leaves your machine except the update check to GitHub.
 
@@ -114,6 +165,9 @@ npm run build:win  # build the installer into release/
 ```
 
 The build downloads PresentMon and compiles a small helper that reads NVIDIA sensors through [NvAPIWrapper](https://github.com/falahati/NvAPIWrapper). Pushing a `v*` tag publishes a release through GitHub Actions.
+
+> [!TIP]
+> If the build stops with an `EPERM` rename error, the repo is probably inside a OneDrive folder. Delete `release/win-unpacked.tmp` and run it again, or move the project outside OneDrive.
 
 ## Credits
 

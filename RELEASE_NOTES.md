@@ -1,3 +1,8 @@
+# SalsaStats 1.0.44
+
+- Disk read, disk write and encoder load now fall back to wmic when PowerShell is blocked, so System I/O can show data on locked-down cloud PCs.
+- Rewrote the README with a guide to the GeForce NOW stream readout, which readings stay live, and troubleshooting tips.
+
 # SalsaStats 1.0.43
 
 - Added hover tooltips to every overlay reading and control in Customize overlay and Settings.

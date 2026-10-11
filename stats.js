@@ -156,6 +156,30 @@ async function runGpuCommand(executable, args, timeout = 3000) {
   }
 }
 
+function parseWmicCsv(output) {
+  const lines = String(output || '').split(/\r*\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const header = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const cells = line.split(',');
+    return Object.fromEntries(header.map((key, index) => [key, cells[index]]));
+  });
+}
+
+function parseVideoEncoderLoad(rows) {
+  const perAdapter = new Map();
+  for (const row of normalizeRows(rows)) {
+    const name = String(row.Name || '');
+    if (!/engtype_VideoEncode/i.test(name)) continue;
+    const utilization = parseOptionalNumber(row.UtilizationPercentage);
+    if (utilization === null) continue;
+    const adapter = name.match(/luid_(.+?)_phys_(\d+)/i)?.[0] || 'gpu';
+    perAdapter.set(adapter, (perAdapter.get(adapter) || 0) + utilization);
+  }
+  if (!perAdapter.size) return null;
+  return Math.round(Math.max(0, Math.min(100, Math.max(...perAdapter.values()))));
+}
+
 async function readCimRows(className, properties) {
   const propertyList = properties.join(',');
   const script = `$ErrorActionPreference='Stop'; $rows = @(Get-CimInstance -ClassName '${className}' | Select-Object -Property ${propertyList}); ConvertTo-Json -InputObject $rows -Compress`;
@@ -172,6 +196,17 @@ async function readCimRows(className, properties) {
 
 async function readGpuNames() {
   return parseCimGpuNames(await readCimRows('Win32_VideoController', ['Name']));
+}
+
+// Some locked-down machines block PowerShell, so counters fall back to wmic.
+let cimBlocked = false;
+async function readPerfRows(className, properties) {
+  if (!cimBlocked) {
+    const rows = await readCimRows(className, properties);
+    if (rows.length) return rows;
+    cimBlocked = true;
+  }
+  return parseWmicCsv(await runGpuCommand('wmic.exe', ['path', className, 'get', properties.join(','), '/format:csv'], 5000));
 }
 
 async function readNvidiaSmiMetrics() {
@@ -230,7 +265,7 @@ function selectGpuController(controllers) {
 
 // Disk throughput from Windows performance counters via CIM.
 async function readIoCounters() {
-  return parseCimDiskCounters(await readCimRows(
+  return parseCimDiskCounters(await readPerfRows(
     'Win32_PerfFormattedData_PerfDisk_PhysicalDisk',
     ['Name', 'DiskReadBytesPersec', 'DiskWriteBytesPersec'],
   ));
@@ -250,6 +285,8 @@ function createStatsReader() {
   let lastGpuRefresh = 0;
   let lastGpuCounterRefresh = 0;
   let lastIoRefresh = 0;
+  let lastEncoderRefresh = 0;
+  let encoderCounter = null;
   let ioCache = { diskReadMBps: null, diskWriteMBps: null };
 
   return async function readStats() {
@@ -386,6 +423,18 @@ function createStatsReader() {
       }
     }
 
+    if (!Number.isFinite(nvapiGpu?.videoEngine) && now - lastEncoderRefresh >= 5000) {
+      lastEncoderRefresh = now;
+      try {
+        encoderCounter = parseVideoEncoderLoad(await readPerfRows(
+          'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine',
+          ['Name', 'UtilizationPercentage'],
+        ));
+      } catch {
+        // Counters are optional.
+      }
+    }
+
     const gfnRig = resolveGfnRig(gpuName);
 
     return {
@@ -411,7 +460,7 @@ function createStatsReader() {
         memoryTotal: gpuMemTotal,
         clock: gpuClock === null ? null : Math.round(gpuClock),
         power: gpuPower,
-        encoder: Number.isFinite(nvapiGpu?.videoEngine) ? Math.round(nvapiGpu.videoEngine) : null,
+        encoder: Number.isFinite(nvapiGpu?.videoEngine) ? Math.round(nvapiGpu.videoEngine) : encoderCounter,
         telemetrySource: gpuTelemetrySource,
         detectedAdapters,
       },
@@ -425,6 +474,8 @@ module.exports = {
   createStatsReader,
   parseNvidiaSmiOutput,
   parseCimDiskCounters,
+  parseVideoEncoderLoad,
+  parseWmicCsv,
   parseCimGpuEngineOutput,
   parseCimGpuMemoryRows,
   parseCimGpuNames,
