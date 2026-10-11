@@ -891,6 +891,18 @@
       });
     }
 
+    // A single empty sample must not blank the STREAM group, so keep the last reading briefly.
+    let lastStream = null;
+    let lastStreamAt = 0;
+    function heldStream(stream, now) {
+      if (stream) {
+        lastStream = stream;
+        lastStreamAt = now;
+        return stream;
+      }
+      return lastStream && now - lastStreamAt < 15000 ? lastStream : null;
+    }
+
     function setField(name, value) {
       document.querySelectorAll(`[data-field="${name}"]`).forEach(field => {
         field.textContent = value;
@@ -940,7 +952,7 @@
       setField('diskRead', oneDecimal(io.diskReadMBps));
       setField('diskWrite', oneDecimal(io.diskWriteMBps));
       renderCoreBars(stats.cpu.perCore || []);
-      const stream = stats.stream;
+      const stream = heldStream(stats.stream, stats.sampledAt);
       setField('streamRtt', stream ? stream.rtd : '--');
       setField('streamQuality', stream ? `${stream.quality} / 100` : '--');
       setField('streamScores', stream ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');

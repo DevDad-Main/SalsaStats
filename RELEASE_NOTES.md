@@ -1,3 +1,8 @@
+# SalsaStats 1.0.39
+
+- The GeForce NOW STREAM group no longer disappears and reappears. It now rides out the pauses in the streamer log and keeps the last reading briefly if a sample is empty.
+- Stream readings now update every second by reading only the new log lines, so values follow the session instead of repeating old ones.
+
 # SalsaStats 1.0.38
 
 - Fixed the GeForce NOW STREAM readout not appearing: the session is now detected by the streamer log growing instead of its last-modified time, which Windows reports late for a log that is being written.

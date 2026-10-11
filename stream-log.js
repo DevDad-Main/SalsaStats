@@ -6,12 +6,12 @@ const STREAM_LOG_PATH = path.join(
   'NVIDIA Corporation', 'NvStream', 'NvStreamerCurrent.log',
 );
 const FIRST_READ_BYTES = 4 * 1024 * 1024;
-const TAIL_READ_BYTES = 128 * 1024;
-const POLL_MS = 2000;
+const MAX_CHUNK_BYTES = 512 * 1024;
+const POLL_MS = 1000;
 const CLIENT_POLL_MS = 15000;
 const SERVICE_CHUNK_BYTES = 8 * 1024 * 1024;
-// QoS lines arrive every second or two while a session is live.
-const STALE_MS = 20000;
+// The streamer log is flushed in bursts, so ride out quiet gaps before calling the session over.
+const STALE_MS = 90000;
 
 const QOS_PATTERN = /Frame Number: (\d+), Client Q-score: (\d+), RTD: (\d+) ms, BW score: (\d+), Loss score: (\d+), Latency score: (\d+), Avg Game FPS: ([\d.]+)/g;
 const MODE_PATTERN = /Streaming mode changed to (\d+)x(\d+)@(\d+)/g;
@@ -94,8 +94,9 @@ function parseStreamLog(text) {
 
 function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_LOG_PATH, onStatus = null) {
   let sticky = {};
-  let lastSize = 0;
+  let offset = -1;
   let lastGrowth = Date.now();
+  let lastSize = 0;
   let lastStatus = null;
   let lastPoll = 0;
   let cached = null;
@@ -130,11 +131,22 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
     }
   }
 
-  function readTail(fd, size) {
-    const length = Math.min(size, lastSize === 0 ? FIRST_READ_BYTES : TAIL_READ_BYTES);
+  // Reads only the bytes added since the last poll, up to the last complete line.
+  function readNew(fd, size) {
+    if (offset < 0 || size < offset) {
+      sticky = size < offset ? {} : sticky;
+      offset = Math.max(0, size - FIRST_READ_BYTES);
+    } else if (size - offset > MAX_CHUNK_BYTES) {
+      offset = size - MAX_CHUNK_BYTES;
+    }
+    const length = size - offset;
+    if (length <= 0) return '';
     const buffer = Buffer.alloc(length);
-    fs.readSync(fd, buffer, 0, length, size - length);
-    return buffer.toString('utf8');
+    fs.readSync(fd, buffer, 0, length, offset);
+    const end = buffer.lastIndexOf(10) + 1;
+    if (end === 0) return '';
+    offset += end;
+    return buffer.toString('utf8', 0, end);
   }
 
   function setStatus(status) {
@@ -152,22 +164,19 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
       fd = fs.openSync(logPath, 'r');
       const { size } = fs.fstatSync(fd);
       if (size !== lastSize) lastGrowth = now;
+      lastSize = size;
       if (size === 0 || now - lastGrowth > STALE_MS) {
         cached = null;
         sticky = {};
-        lastSize = 0;
+        offset = -1;
         setStatus('idle');
         return cached;
       }
-      if (size < lastSize) sticky = {};
       readClient(now);
-      const parsed = parseStreamLog(readTail(fd, size));
-      lastSize = size;
-      sticky = { ...sticky, ...parsed };
+      sticky = { ...sticky, ...parseStreamLog(readNew(fd, size)) };
       cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client } : null;
       setStatus(cached ? 'ok' : 'no-qos-data');
     } catch (error) {
-      cached = null;
       setStatus(`error:${error.code || error.message}`);
     } finally {
       if (fd !== undefined) fs.closeSync(fd);
