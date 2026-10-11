@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { parseServiceLog, parseStreamLog } = require('../stream-log');
+const { createStreamLogReader, parseServiceLog, parseStreamLog } = require('../stream-log');
 
 test('reads stream health and names the weakest link below the threshold', () => {
   const line = 'Frame Number: 1, SA Scores : Overall: 0.82, Gpu: 0.99, Server: 1.00, Visual: 0.99, Decoder: 0.55, DownlinkLag: 0.98, DownlinkCongestion: 1.00, Uplink: 0.94, WiFiScan: 0.00, Throttling: 0.00';
@@ -32,13 +32,18 @@ const LOG = [
 ].join('\n');
 
 test('reads the latest QoS sample and the stream mode from the streamer log', () => {
-  assert.deepEqual(parseStreamLog(LOG), {
+  const result = parseStreamLog(LOG);
+  assert.deepEqual(result, {
     quality: 95,
     rtd: 21,
     bandwidthScore: 100,
     lossScore: 99,
     latencyScore: 95,
     gameFps: 4.29,
+    qosFrame: 69431,
+    qosAt: null,
+    chunkSamples: 2,
+    chunkLossDips: 1,
     width: 3840,
     height: 2160,
     fps: 60,
@@ -46,6 +51,35 @@ test('reads the latest QoS sample and the stream mode from the streamer log', ()
     maxBitrateMbps: 100,
   });
 });
+
+test('reads the UTC timestamp of a QoS line', () => {
+  const line = '#1(I)[2026-10-11 05:47:17,886]=07:47:17*00002*{0000b38}&D9F5C687&^0001^<QosManagerTxNati> Frame Number: 5, Client Q-score: 95, RTD: 21 ms, BW score: 100, Loss score: 100, Latency score: 95, Avg Game FPS: 5.0';
+  assert.equal(parseStreamLog(line).qosAt, Date.UTC(2026, 9, 11, 5, 47, 17, 886));
+});
+
+test('reader follows new log lines, derives stream FPS and counts loss dips', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'stream-')), 'log.txt');
+  const line = (second, frame, rtd, loss) => `#1(I)[2026-10-11 05:47:${String(second).padStart(2, '0')},000]=x^0001^<QosManagerTxNati> Frame Number: ${frame}, Client Q-score: 95, RTD: ${rtd} ms, BW score: 100, Loss score: ${loss}, Latency score: 95, Avg Game FPS: 5.0\n`;
+  try {
+    fs.writeFileSync(file, line(10, 100, 21, 100));
+    const read = createStreamLogReader(file, file);
+    const base = Date.UTC(2026, 9, 11, 5, 47, 10);
+    assert.equal(read(base).rtd, 21);
+    fs.appendFileSync(file, line(12, 220, 30, 90));
+    const next = read(base + 2000);
+    assert.equal(next.rtd, 30);
+    assert.equal(next.streamFps, 60);
+    assert.equal(next.lossDips, 1);
+    assert.equal(next.samples, 2);
+    assert.equal(next.ageMs, 0);
+  } finally {
+    fs.rmSync(path.dirname(file), { recursive: true, force: true });
+  }
+});
+
 
 test('returns nothing for a log without stream data', () => {
   assert.deepEqual(parseStreamLog('<NvStreamer> Using Grid mode.'), {});

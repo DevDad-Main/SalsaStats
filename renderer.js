@@ -40,7 +40,7 @@
         fpsCurrent: true, fpsAverage: true, fpsLow: true, graphRate: true, graphTime: true,
         cpuBusy: false, gpuBusy: false, clickToPhoton: false, syncInfo: false, frameType: false, videoBusy: false,
         encoderLoad: false, diskRead: false, diskWrite: false,
-        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false,
+        streamRtt: true, streamQuality: true, streamScores: false, streamMode: false, streamBitrate: false, streamHealth: false, streamBottleneck: true, streamClient: false, streamCodec: true, streamFeatures: false, streamFps: true, streamLoss: true, streamAge: true,
       },
       colors: { gpu: '#3ddc97', cpu: '#5aa9ff', memory: '#f5b94c', fps: '#c084fc' },
       scale: 100,
@@ -971,6 +971,9 @@
         stream.reflex && 'Reflex', stream.cloudGsync && 'G-Sync', stream.l4s && 'L4S',
       ].filter(Boolean) : [];
       setField('streamFeatures', featureList.length ? featureList.join(' \u00b7 ') : '--');
+      setField('streamFps', stream && Number.isFinite(stream.streamFps) ? String(stream.streamFps) : '--');
+      setField('streamLoss', stream && Number.isFinite(stream.lossDips) ? `${stream.lossDips} / ${stream.samples}` : '--');
+      setField('streamAge', stream && Number.isFinite(stream.ageMs) ? `${Math.round(stream.ageMs / 1000)} s` : '--');
       const unavailable = {
         streamRtt: !stream,
         streamQuality: !stream,
@@ -982,6 +985,9 @@
         streamClient: !(stream && stream.clientType),
         streamCodec: !(stream && stream.codec),
         streamFeatures: !featureList.length,
+        streamFps: !(stream && Number.isFinite(stream.streamFps)),
+        streamLoss: !(stream && Number.isFinite(stream.lossDips)),
+        streamAge: !(stream && Number.isFinite(stream.ageMs)),
         encoderLoad: !Number.isFinite(stats.gpu.encoder),
         diskRead: !Number.isFinite(io.diskReadMBps),
         diskWrite: !Number.isFinite(io.diskWriteMBps),

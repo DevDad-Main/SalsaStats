@@ -13,7 +13,7 @@ const SERVICE_CHUNK_BYTES = 8 * 1024 * 1024;
 // The streamer log is flushed in bursts, so ride out quiet gaps before calling the session over.
 const STALE_MS = 90000;
 
-const QOS_PATTERN = /Frame Number: (\d+), Client Q-score: (\d+), RTD: (\d+) ms, BW score: (\d+), Loss score: (\d+), Latency score: (\d+), Avg Game FPS: ([\d.]+)/g;
+const QOS_PATTERN = /(?:\[(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d),(\d{3})\][^\n]*?)?Frame Number: (\d+), Client Q-score: (\d+), RTD: (\d+) ms, BW score: (\d+), Loss score: (\d+), Latency score: (\d+), Avg Game FPS: ([\d.]+)/g;
 const MODE_PATTERN = /Streaming mode changed to (\d+)x(\d+)@(\d+)/g;
 const BITRATE_PATTERN = /Actual Bitrate: ([\d.]+)Mbps Max Bitrate: ([\d.]+)Mbps/g;
 const SA_PATTERN = /SA Scores : Overall: ([\d.]+), Gpu: ([\d.]+), Server: ([\d.]+), Visual: ([\d.]+), Decoder: ([\d.]+), DownlinkLag: ([\d.]+), DownlinkCongestion: ([\d.]+), Uplink: ([\d.]+)/g;
@@ -74,15 +74,21 @@ function parseStreamLog(text) {
     const worst = parts.reduce((low, value, index) => (value < parts[low] ? index : low), 0);
     result.bottleneck = parts[worst] < BOTTLENECK_THRESHOLD ? SA_LABELS[worst] : null;
   }
-  const qos = lastMatch(text, QOS_PATTERN);
+  const qosMatches = [...text.matchAll(QOS_PATTERN)];
+  const qos = qosMatches[qosMatches.length - 1];
   if (qos) {
     Object.assign(result, {
-      quality: Number(qos[2]),
-      rtd: Number(qos[3]),
-      bandwidthScore: Number(qos[4]),
-      lossScore: Number(qos[5]),
-      latencyScore: Number(qos[6]),
-      gameFps: Number(qos[7]),
+      quality: Number(qos[5]),
+      rtd: Number(qos[6]),
+      bandwidthScore: Number(qos[7]),
+      lossScore: Number(qos[8]),
+      latencyScore: Number(qos[9]),
+      gameFps: Number(qos[10]),
+      qosFrame: Number(qos[4]),
+      // Log timestamps are UTC.
+      qosAt: qos[1] ? Date.parse(`${qos[1]}T${qos[2]}.${qos[3]}Z`) : null,
+      chunkSamples: qosMatches.length,
+      chunkLossDips: qosMatches.filter(match => Number(match[8]) < 100).length,
     });
   }
   const mode = lastMatch(text, MODE_PATTERN);
@@ -94,6 +100,8 @@ function parseStreamLog(text) {
 
 function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_LOG_PATH, onStatus = null) {
   let sticky = {};
+  let session = { samples: 0, lossDips: 0 };
+  let prevQos = null;
   let offset = -1;
   let lastGrowth = Date.now();
   let lastSize = 0;
@@ -135,6 +143,10 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
   function readNew(fd, size) {
     if (offset < 0 || size < offset) {
       sticky = size < offset ? {} : sticky;
+      if (size < offset) {
+        session = { samples: 0, lossDips: 0 };
+        prevQos = null;
+      }
       offset = Math.max(0, size - FIRST_READ_BYTES);
     } else if (size - offset > MAX_CHUNK_BYTES) {
       offset = size - MAX_CHUNK_BYTES;
@@ -168,13 +180,26 @@ function createStreamLogReader(logPath = STREAM_LOG_PATH, servicePath = SERVICE_
       if (size === 0 || now - lastGrowth > STALE_MS) {
         cached = null;
         sticky = {};
+        session = { samples: 0, lossDips: 0 };
+        prevQos = null;
         offset = -1;
         setStatus('idle');
         return cached;
       }
       readClient(now);
-      sticky = { ...sticky, ...parseStreamLog(readNew(fd, size)) };
-      cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client } : null;
+      const parsed = parseStreamLog(readNew(fd, size));
+      if (parsed.chunkSamples) {
+        session.samples += parsed.chunkSamples;
+        session.lossDips += parsed.chunkLossDips;
+        if (Number.isFinite(parsed.qosAt) && prevQos && parsed.qosAt > prevQos.at && parsed.qosFrame > prevQos.frame) {
+          parsed.streamFps = Math.round(((parsed.qosFrame - prevQos.frame) * 1000) / (parsed.qosAt - prevQos.at));
+        }
+        if (Number.isFinite(parsed.qosAt)) prevQos = { at: parsed.qosAt, frame: parsed.qosFrame };
+      }
+      delete parsed.chunkSamples;
+      delete parsed.chunkLossDips;
+      sticky = { ...sticky, ...parsed, lossDips: session.lossDips, samples: session.samples };
+      cached = Number.isFinite(sticky.rtd) ? { ...sticky, ...client, ageMs: Number.isFinite(sticky.qosAt) ? Math.max(0, now - sticky.qosAt) : null } : null;
       setStatus(cached ? 'ok' : 'no-qos-data');
     } catch (error) {
       setStatus(`error:${error.code || error.message}`);

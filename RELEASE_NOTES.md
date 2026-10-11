@@ -1,3 +1,8 @@
+# SalsaStats 1.0.40
+
+- Added STREAM readings worked out from the streamer log: Stream FPS (from the stream's frame counter and log timestamps), Loss dips (how many samples this session had a Loss score below 100) and Data age (how far behind the log is, so you can tell a frozen readout from a steady connection).
+- These are estimates from NVIDIA's session scores. Real packet and frame loss counts are only measured on the client and are not available to SalsaStats.
+
 # SalsaStats 1.0.39
 
 - The GeForce NOW STREAM group no longer disappears and reappears. It now rides out the pauses in the streamer log and keeps the last reading briefly if a sample is empty.
