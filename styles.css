@@ -298,25 +298,7 @@
     .osd-live { color: var(--mint); }
     .nvapi-status { margin-top: 6px; color: var(--muted); font-size: 11px; }
     .nvapi-warning { margin-top: 6px; color: var(--amber); font-size: 11px; line-height: 1.5; }
-    @media (prefers-reduced-motion: reduce) { .stat-card, .meter-fill, .window-action { transition: none; } .stat-card:hover { transform: none; } .overlay-enter-active, .overlay-exit-active { animation: none !important; } }
-
-@keyframes overlayBounceIn {
-  0%   { transform: scale(0.3) translateY(40px); opacity: 0; }
-  40%  { transform: scale(1.06) translateY(-6px); opacity: 1; }
-  60%  { transform: scale(0.96) translateY(3px); }
-  80%  { transform: scale(1.02) translateY(-1px); }
-  100% { transform: scale(1) translateY(0); }
-}
-
-@keyframes overlayBounceOut {
-  0%   { transform: scale(1) translateY(0); opacity: 1; }
-  30%  { transform: scale(1.04) translateY(-4px); }
-  60%  { transform: scale(0.92) translateY(12px); opacity: 0.6; }
-  100% { transform: scale(0.25) translateY(50px); opacity: 0; }
-}
-
-.osd-panel.overlay-enter-active { animation: overlayBounceIn 520ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-.osd-panel.overlay-exit-active { animation: overlayBounceOut 360ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards; }
+    @media (prefers-reduced-motion: reduce) { .stat-card, .meter-fill, .window-action { transition: none; } .stat-card:hover { transform: none; } }
 
     /* Tabs and cleaner layout */
     .tabs { display: flex; gap: 4px; height: 46px; padding: 0 32px; align-items: flex-end; border-bottom: 1px solid var(--line); }
