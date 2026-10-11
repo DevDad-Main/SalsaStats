@@ -9,7 +9,22 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 New-Item -ItemType Directory -Force $out, $cache | Out-Null
 $package = Join-Path $cache 'nvapiwrapper.zip'
 if (-not (Test-Path $package)) {
-  (New-Object Net.WebClient).DownloadFile('https://www.nuget.org/api/v2/package/NvAPIWrapper.Net/0.8.1.101', $package)
+  $url = 'https://www.nuget.org/api/v2/package/NvAPIWrapper.Net/0.8.1.101'
+  $client = New-Object Net.WebClient
+  $maxRetries = 3
+  $retryDelaySec = 10
+  for ($i = 1; $i -le $maxRetries; $i++) {
+    try {
+      Write-Host "Downloading NvAPIWrapper from NuGet (attempt $i of $maxRetries)..."
+      $client.DownloadFile($url, $package)
+      Write-Host "Download succeeded."
+      break
+    } catch {
+      if ($i -eq $maxRetries) { throw $_ }
+      Write-Warning "Download failed: $($_.Exception.Message). Retrying in $retryDelaySec seconds..."
+      Start-Sleep -Seconds $retryDelaySec
+    }
+  }
 }
 $extract = Join-Path $cache 'nvapiwrapper'
 if (-not (Test-Path $extract)) {
