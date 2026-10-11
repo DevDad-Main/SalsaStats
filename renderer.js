@@ -956,7 +956,10 @@
       // QoS values come from log lines that NVIDIA stops writing mid-session; stale ones are not shown.
       const live = Boolean(stream && stream.live);
       const sent = stats.network?.sentMbps;
-      setField('streamRtt', live ? stream.rtd : '--');
+      const ageSeconds = stream && Number.isFinite(stream.ageMs) ? Math.round(stream.ageMs / 1000) : null;
+      const ageText = ageSeconds === null ? null : ageSeconds < 120 ? `${ageSeconds} s` : `${Math.round(ageSeconds / 60)} min`;
+      const hasRtd = Boolean(stream && Number.isFinite(stream.rtd));
+      setField('streamRtt', !hasRtd ? '--' : live || ageText === null ? `${stream.rtd} ms` : `${stream.rtd} ms \u00b7 ${ageText} ago`);
       setField('streamQuality', live ? `${stream.quality} / 100` : '--');
       setField('streamScores', live ? `${stream.bandwidthScore} / ${stream.lossScore} / ${stream.latencyScore}` : '--');
       setField('streamMode', stream && Number.isFinite(stream.width) ? `${stream.width}x${stream.height}@${stream.fps}` : '--');
@@ -976,12 +979,10 @@
       setField('streamFeatures', featureList.length ? featureList.join(' \u00b7 ') : '--');
       setField('streamFps', live && Number.isFinite(stream.streamFps) ? String(stream.streamFps) : '--');
       setField('streamLoss', live && Number.isFinite(stream.lossDips) ? `${stream.lossDips} / ${stream.samples}` : '--');
-      const ageSeconds = stream && Number.isFinite(stream.ageMs) ? Math.round(stream.ageMs / 1000) : null;
-      setField('streamAge', ageSeconds === null ? '--'
-        : `${ageSeconds < 120 ? `${ageSeconds} s` : `${Math.round(ageSeconds / 60)} min`}${live ? '' : ' (stale)'}`);
+      setField('streamAge', ageText === null ? '--' : `${ageText}${live ? '' : ' (stale)'}`);
       setField('streamBandwidth', stream && Number.isFinite(sent) ? `${sent.toFixed(sent < 10 ? 1 : 0)} Mbps` : '--');
       const unavailable = {
-        streamRtt: !live,
+        streamRtt: !hasRtd,
         streamQuality: !live,
         streamScores: !live,
         streamMode: !(stream && Number.isFinite(stream.width)),

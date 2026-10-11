@@ -1,3 +1,8 @@
+# SalsaStats 1.0.42
+
+- Bandwidth used now reads only the GeForce NOW STREAM network adapter, so game-file and other rig traffic no longer inflate it.
+- Round trip stays on screen after NVIDIA stops logging it, shown as the last known value with its age, for example `22 ms · 76 min ago`. Live round trip is not available from the rig once the streamer log stops.
+
 # SalsaStats 1.0.41
 
 - Fixed the STREAM readout showing old values. NVIDIA stops writing round-trip and score lines to the streamer log part-way through a session, so those readings are now hidden once they are more than 30 seconds old, and Data age shows how old they are.
